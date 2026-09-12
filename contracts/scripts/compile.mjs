@@ -5,14 +5,22 @@ import { fileURLToPath } from 'node:url';
 import solc from 'solc';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const sourcePath = path.join(root, 'src', 'VetoExitGuard.sol');
+const sourceDirectory = path.join(root, 'src');
 
-export function compileGuard() {
+export function compileContracts() {
+  const sources = Object.fromEntries(
+    fs
+      .readdirSync(sourceDirectory)
+      .filter((file) => file.endsWith('.sol'))
+      .map((file) => [
+        file,
+        { content: fs.readFileSync(path.join(sourceDirectory, file), 'utf8') },
+      ]),
+  );
+
   const input = {
     language: 'Solidity',
-    sources: {
-      'VetoExitGuard.sol': { content: fs.readFileSync(sourcePath, 'utf8') },
-    },
+    sources,
     settings: {
       optimizer: { enabled: true, runs: 100_000 },
       evmVersion: 'cancun',
@@ -24,17 +32,26 @@ export function compileGuard() {
   if (errors.length > 0) {
     throw new Error(errors.map(({ formattedMessage }) => formattedMessage).join('\n'));
   }
-  return output.contracts['VetoExitGuard.sol'].VetoExitGuard;
+  return output.contracts;
+}
+
+export function compileGuard() {
+  return compileContracts()['VetoExitGuard.sol'].VetoExitGuard;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const artifact = compileGuard();
+  const contracts = compileContracts();
   if (!process.argv.includes('--check')) {
     const outputDirectory = path.join(root, 'dist');
     fs.mkdirSync(outputDirectory, { recursive: true });
-    fs.writeFileSync(
-      path.join(outputDirectory, 'VetoExitGuard.json'),
-      `${JSON.stringify(artifact, null, 2)}\n`,
-    );
+    for (const [source, compiled] of Object.entries(contracts)) {
+      for (const [name, artifact] of Object.entries(compiled)) {
+        if (!artifact.evm?.bytecode?.object) continue;
+        fs.writeFileSync(
+          path.join(outputDirectory, `${name}.json`),
+          `${JSON.stringify({ source, ...artifact }, null, 2)}\n`,
+        );
+      }
+    }
   }
 }
