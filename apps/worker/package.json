@@ -1,5 +1,17 @@
 {
   "name": "@veto/worker",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/index.ts",
+    "lint": "tsc --noEmit",
+    "start": "tsx src/index.ts",
+    "test": "tsx --test test/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "4.23.13"
+  }
 }

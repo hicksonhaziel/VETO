@@ -4,6 +4,7 @@
 
 node_modules/
 .turbo/
+.local-data/
 dist/
 coverage/
 .env
