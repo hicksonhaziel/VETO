@@ -180,11 +180,16 @@ for KeeperHub execution evidence.
 
 ## End-of-day decision record
 
-| Gate          | Result                    | Evidence                   | Next action             |
-| ------------- | ------------------------- | -------------------------- | ----------------------- |
-| A — signal    | PASS / FALLBACK / BLOCKED | delivery hash or blocker   | adapter or scanner      |
-| B — vault     | PASS / BLOCKED            | chain, vault, pinned block | fork tests              |
-| C — execution | PASS / BLOCKED            | execution ID and tx hash   | hardening or escalation |
+| Gate          | Result   | Evidence                                                             | Next action                  |
+| ------------- | -------- | -------------------------------------------------------------------- | ---------------------------- |
+| A — signal    | FALLBACK | Standard tier cannot connect the exact monitor to Webhook            | Use canonical Morpho scanner |
+| B — vault     | PASS     | Gauntlet USDC Prime, Base block `51221130`, deterministic fork proof | Retain regression tests      |
+| C — execution | PASS     | `71hffqk5o7i68xphnkoc0` / `0x0fdf2a92…0e021584b`                     | Build product pipeline       |
+
+Decision recorded on 2026-09-12 by the project operator and Codex. Gate A uses the planned canonical
+chain fallback and must not be described as a completed Glacient webhook integration. Gate B uses a
+real Morpho Base deployment with a labelled fork-only proposal. Gate C uses a controlled Base
+Sepolia fixture and a real KeeperHub-submitted public transaction.
 
 Record the date, operator, exact environment, known limitations, and the next morning's first task.
 Do not proceed to dashboard polish while Gate B or Gate C is unresolved.

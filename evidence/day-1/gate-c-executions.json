@@ -1,0 +1,66 @@
+[
+  {
+    "label": "deploy-controlled-factory",
+    "executionId": "m94muba275zk34vf3bjjx",
+    "transactionHash": "0xaa537798ded9b7d7698cda1dca8b67cf5a4ba191efdd53cb4b87244103ab7949",
+    "blockNumber": "46735164",
+    "gasUsed": "1690688"
+  },
+  {
+    "label": "deploy-exit-guard",
+    "executionId": "4almo2xotrb7gufebkir2",
+    "transactionHash": "0x3ec5740123f33b963969853ace859499482e7fc96232da50e65e2a26b8b5e39c",
+    "blockNumber": "46735170",
+    "gasUsed": "945266"
+  },
+  {
+    "label": "create-fixture",
+    "executionId": "swa1vuvmq1j5iapdkur26",
+    "transactionHash": "0x80f577226b1516b21fc449d9afcdb6c5c03df0eb9a63c74b3c57a554fd264674",
+    "blockNumber": "46735176",
+    "gasUsed": "1426373"
+  },
+  {
+    "label": "approve-fixture-deposit",
+    "executionId": "drdm15caug2djp783k87a",
+    "transactionHash": "0x070a7f406c7949487a2e4aa6c031b51ffbc49f568751a58e736ed97737cf16ee",
+    "blockNumber": "46735180",
+    "gasUsed": "68394"
+  },
+  {
+    "label": "deposit-fixture-assets",
+    "executionId": "or80l7tw2aepy297elch6",
+    "transactionHash": "0x4314743c361507b217c0ba536ac03df523d0646c0598a440fbabe13724ff6e67",
+    "blockNumber": "46735183",
+    "gasUsed": "97271"
+  },
+  {
+    "label": "approve-exit-guard",
+    "executionId": "tvw9c0l77c1s8q30ombia",
+    "transactionHash": "0x5ef738aea9739e98cd95e254850704d94afa249ded0a34f8335ded9f72aec23f",
+    "blockNumber": "46735189",
+    "gasUsed": "68372",
+    "recoveredByIdempotentReplay": true
+  },
+  {
+    "label": "arm-exit-mandate",
+    "executionId": "7mstig5wyoj2mm371t9t2",
+    "transactionHash": "0x9eacbd6cbbc2e71742624d456be827da8bed8b7acb9a65a8d57f4870333f475a",
+    "blockNumber": "46736439",
+    "gasUsed": "253451"
+  },
+  {
+    "label": "queue-fee-proposal",
+    "executionId": "3lu5u7ls1devgob20upew",
+    "transactionHash": "0xd86df7230abb3b2ebf8282cb61800425dd0edbc8e63de1a2ce2984da6de7824c",
+    "blockNumber": "46736443",
+    "gasUsed": "69870"
+  },
+  {
+    "label": "execute-owner-exit",
+    "executionId": "71hffqk5o7i68xphnkoc0",
+    "transactionHash": "0x0fdf2a928713da623cfbfb95d6d5ca47be9cd6e058a5c29c6cfa30b0e021584b",
+    "blockNumber": "46736449",
+    "gasUsed": "116130"
+  }
+]

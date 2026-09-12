@@ -1,8 +1,8 @@
 # Gate C — KeeperHub execution
 
-Status: **IN PROGRESS — authenticated reads pass; no redemption broadcast yet**
+Status: **PASS — KeeperHub-submitted owner-only redemption verified on Base Sepolia**
 
-Checked at: 2026-09-12T16:48:10Z
+Checked at: 2026-09-12T19:30:10Z
 
 ## Checks completed
 
@@ -28,17 +28,44 @@ Checked at: 2026-09-12T16:48:10Z
 The real API key is stored only in the ignored local `.env`. This evidence file and `.env.example`
 contain no secret value. The disclosed development key must be rotated before production use.
 
-## Remaining work before PASS
+## Controlled Base Sepolia deployment
 
-1. Deploy a controlled Vault V2 fixture and hardened candidate guard on Base Sepolia.
-2. Obtain a small amount of Base Sepolia test USDC for the depositor.
-3. Deposit, register a mandate, and grant a finite vault-share allowance.
-4. Queue a fee proposal above the mandate ceiling.
-5. Simulate the exact guard call through KeeperHub and independently with `eth_call`.
-6. Broadcast once with a persisted idempotency key.
-7. Save the execution ID and transaction hash, then independently verify the successful receipt,
-   consumed mandate, shares burned, owner asset receipt, and deadline.
-8. Prove duplicate delivery and proposal revocation cannot create another economic effect.
+The public test used a clearly labelled controlled fixture because no suitable funded public Morpho
+Vault V2 testnet position was available. The fixture token is **not USDC** and has no financial
+value. Contract deployment and every setup call were submitted through KeeperHub.
 
-An authenticated read is useful integration evidence but does not pass Gate C. Only a real
-KeeperHub-submitted redemption does.
+| Contract | Base Sepolia address |
+|---|---|
+| Controlled factory | `0xA4626F84b7E745Ce98371E9458416C050bB5d358` |
+| Fixture vault | `0x7ca4178d1647548fE47f4927dE8e36b14BbC5988` |
+| Fixture asset | `0x2f129AB89E2ABd291FE6Ac73DB542F5CeD02dD3D` |
+| VETO exit guard | `0x2ae06c9233884af99fDD07353De48b5D97640100` |
+
+The fixture held `10,000,000` six-decimal test units. Mandate `0` authorized exactly `10,000,000`
+shares, fixed the receiver to the KeeperHub wallet, required at least `9,999,999` assets, allowed a
+1% annualized management fee, and retained a 300-second safety margin. A controlled 2% annualized
+fee proposal was then queued with a one-hour timelock.
+
+## KeeperHub execution proof
+
+- KeeperHub execution ID: `71hffqk5o7i68xphnkoc0`
+- Base Sepolia transaction:
+  `0x0fdf2a928713da623cfbfb95d6d5ca47be9cd6e058a5c29c6cfa30b0e021584b`
+- Block: `46736449`
+- Gas used: `116130`
+- Independently fetched receipt status: `0x1` (success)
+- Post-state owner shares: `0`
+- Post-state owner fixture assets: `10,000,000`
+- Post-state guard fixture assets: `0`
+- Post-state mandate: inactive/consumed
+
+The receipt logs independently show the fixture asset moving from the vault to the KeeperHub owner,
+the vault withdrawal naming that same address as receiver and owner, and the guard `Exited` event
+for mandate `0`. A transient status-poll timeout occurred during the finite guard-approval step;
+replaying the identical request with the same idempotency key recovered execution
+`tvw9c0l77c1s8q30ombia` and its successful transaction without sending another approval.
+
+All nine execution IDs and public transaction hashes are retained in `gate-c-executions.json`.
+Gate B's real-deployment fork test proves duplicate execution, revoked proposal, missing allowance,
+and excessive minimum-output failures against the hardened guard. The public Gate C transaction
+proves KeeperHub delivery and owner-only asset receipt on the controlled testnet fixture.
