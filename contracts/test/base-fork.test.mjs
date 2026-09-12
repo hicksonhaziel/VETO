@@ -230,6 +230,7 @@ test('owner-only redemption succeeds on the pinned Gauntlet Base deployment', as
     true,
   );
 
+  const highMinimumSnapshot = await publicClient.request({ method: 'evm_snapshot' });
   const highMinimumArmHash = await ownerClient.writeContract({
     address: guard,
     abi: artifact.abi,
@@ -245,6 +246,10 @@ test('owner-only redemption succeeds on the pinned Gauntlet Base deployment', as
       functionName: 'execute',
       args: [1n, proposal, executableAt],
     }),
+  );
+  assert.equal(
+    await publicClient.request({ method: 'evm_revert', params: [highMinimumSnapshot] }),
+    true,
   );
 
   const executeHash = await relayerClient.writeContract({

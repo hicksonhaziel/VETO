@@ -32,6 +32,8 @@ contract VetoExitGuard {
     IVaultV2Factory public immutable factory;
     uint256 public nextMandateId;
     mapping(uint256 mandateId => Mandate) public mandates;
+    mapping(address owner => mapping(address vault => uint256 encodedMandateId))
+        public activeMandateByOwnerVault;
 
     bool private executing;
 
@@ -58,6 +60,12 @@ contract VetoExitGuard {
         uint256 safetySeconds
     );
     event MandateCancelled(uint256 indexed mandateId, address indexed owner);
+    event MandateReplaced(
+        uint256 indexed previousMandateId,
+        uint256 indexed newMandateId,
+        address indexed owner,
+        address vault
+    );
     event Exited(
         uint256 indexed mandateId,
         address indexed owner,
@@ -80,13 +88,21 @@ contract VetoExitGuard {
         uint256 expiresAt,
         uint256 safetySeconds
     ) external returns (uint256 mandateId) {
-        if (!factory.isVaultV2(vault)) revert InvalidVault();
+        if (vault.code.length == 0 || !factory.isVaultV2(vault)) revert InvalidVault();
         if (
             shares == 0 || minAssets == 0 || expiresAt <= block.timestamp || safetySeconds == 0
+                || safetySeconds >= expiresAt - block.timestamp
                 || maxFeePerSecond >= MAX_MANAGEMENT_FEE
         ) revert InvalidMandate();
 
         mandateId = nextMandateId++;
+        uint256 previousEncodedMandateId = activeMandateByOwnerVault[msg.sender][vault];
+        if (previousEncodedMandateId != 0) {
+            uint256 previousMandateId = previousEncodedMandateId - 1;
+            mandates[previousMandateId].active = false;
+            emit MandateReplaced(previousMandateId, mandateId, msg.sender, vault);
+        }
+
         mandates[mandateId] = Mandate({
             owner: msg.sender,
             vault: vault,
@@ -97,6 +113,7 @@ contract VetoExitGuard {
             safetySeconds: safetySeconds,
             active: true
         });
+        activeMandateByOwnerVault[msg.sender][vault] = mandateId + 1;
         emit MandateArmed(
             mandateId,
             msg.sender,
@@ -112,7 +129,11 @@ contract VetoExitGuard {
     function cancel(uint256 mandateId) external {
         Mandate storage mandate = mandates[mandateId];
         if (msg.sender != mandate.owner) revert NotMandateOwner();
+        if (!mandate.active) revert MandateInactive();
         mandate.active = false;
+        if (activeMandateByOwnerVault[msg.sender][mandate.vault] == mandateId + 1) {
+            activeMandateByOwnerVault[msg.sender][mandate.vault] = 0;
+        }
         emit MandateCancelled(mandateId, msg.sender);
     }
 
@@ -125,6 +146,10 @@ contract VetoExitGuard {
 
         Mandate storage mandate = mandates[mandateId];
         if (!mandate.active || block.timestamp >= mandate.expiresAt) revert MandateInactive();
+        if (
+            activeMandateByOwnerVault[mandate.owner][mandate.vault] != mandateId + 1
+                || mandate.vault.code.length == 0 || !factory.isVaultV2(mandate.vault)
+        ) revert InvalidVault();
         if (proposal.length != 36 || bytes4(proposal) != SET_MANAGEMENT_FEE_SELECTOR) {
             revert UnsupportedProposal();
         }
@@ -147,6 +172,7 @@ contract VetoExitGuard {
         }
 
         mandate.active = false;
+        activeMandateByOwnerVault[mandate.owner][mandate.vault] = 0;
         assets = vault.redeem(mandate.shares, mandate.owner, mandate.owner);
         if (assets < mandate.minAssets) revert AssetsBelowMinimum();
 
