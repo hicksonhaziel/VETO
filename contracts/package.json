@@ -1,0 +1,17 @@
+{
+  "name": "@veto/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/compile.mjs",
+    "lint": "node scripts/compile.mjs --check",
+    "test": "node --test test/**/*.test.mjs",
+    "typecheck": "node scripts/compile.mjs --check"
+  },
+  "devDependencies": {
+    "@foundry-rs/anvil": "1.7.1",
+    "solc": "0.8.28",
+    "viem": "2.56.3"
+  }
+}
