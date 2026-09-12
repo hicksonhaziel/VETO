@@ -17,6 +17,7 @@ Pinned API block: Base block `51221130`
 | Version | `2.0` |
 | Factory | `0x4501125508079A99ebBebCE205DeC9593C2b5857` |
 | Creation block | `37179342` |
+| Creation transaction | `0xd28de3cf1256f906214e7cc1fc3070d8f04a30edebcfae7fc554e169da89fb26` |
 | Asset | USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`) |
 | Asset decimals | `6` |
 | Owner | `0x5a4E19842e09000a582c20A4f524C26Fb48Dd4D0` |
@@ -32,6 +33,11 @@ Pinned API block: Base block `51221130`
 - An authenticated KeeperHub read of `factory.isVaultV2(vault)` returned `true`.
 - Base Blockscout reports verified Solidity source compiled with `0.8.28`, Cancun EVM, with
   `lib/vault-v2/src/VaultV2.sol` as the contract path.
+- The deployed verified `VaultV2.sol` matches Morpho's `2025-09-15` release at commit
+  `6f2af6602e05d9e123a87c1067712a4566608044`; the only textual difference is one trailing blank
+  line. Blockscout reports Solidity `0.8.28`, optimizer enabled with 100,000 runs, Cancun, and IR.
+- The factory log at block `37179342` identifies the selected vault, Base USDC asset, and creation
+  transaction. The factory still returns `isVaultV2(vault) = true`.
 - All four vault gates are unset according to the Morpho API.
 - The Morpho API reports one Morpho Market V1 V2 adapter.
 - At the pinned API block, the withdrawal-options endpoint reported:
@@ -50,11 +56,10 @@ Both Base mainnet and Base Sepolia are currently enabled by KeeperHub.
 
 ## Remaining work before PASS
 
-1. Pin and compare the exact verified deployed source against the selected upstream release.
-2. Build the candidate guard and simulate its exact call against this deployment at a pinned block.
-3. Prove owner-only receipt, finite share allowance, minimum-assets enforcement, and revoked-proposal
+1. Build the candidate guard and simulate its exact call against this deployment at a pinned block.
+2. Prove owner-only receipt, finite share allowance, minimum-assets enforcement, and revoked-proposal
    failure.
-4. Capture a real pending `setManagementFee` proposal or label the public portion as a replay/fork.
+3. Capture a real pending `setManagementFee` proposal or label the public portion as a replay/fork.
 
 ## Sources
 
