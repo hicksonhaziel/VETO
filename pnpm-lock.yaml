@@ -45,7 +45,11 @@ importers:
 
   packages/glacient: {}
 
-  packages/keeperhub: {}
+  packages/keeperhub:
+    dependencies:
+      viem:
+        specifier: 2.56.3
+        version: 2.56.3(typescript@7.0.2)
 
   packages/morpho-v2:
     dependencies:

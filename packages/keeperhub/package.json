@@ -1,5 +1,12 @@
 {
   "name": "@veto/keeperhub",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gate-c": "node --env-file=../../.env scripts/day1-gate-c.mjs"
+  },
+  "dependencies": {
+    "viem": "2.56.3"
+  }
 }
