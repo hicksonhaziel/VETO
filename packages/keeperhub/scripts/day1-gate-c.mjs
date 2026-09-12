@@ -46,25 +46,41 @@ const fixtureVaultArtifact = artifact('ControlledVaultV2Fixture');
 const guardArtifact = artifact('VetoExitGuard');
 
 async function keeperHubRequest(pathname, options = {}) {
-  const response = await fetch(new URL(pathname, keeperHubBaseUrl), {
-    ...options,
-    headers: {
-      authorization: `Bearer ${keeperHubApiKey}`,
-      'content-type': 'application/json',
-      ...options.headers,
-    },
-  });
-  const text = await response.text();
-  let body;
-  try {
-    body = text ? JSON.parse(text) : {};
-  } catch {
-    body = { raw: text };
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const response = await fetch(new URL(pathname, keeperHubBaseUrl), {
+        ...options,
+        signal: AbortSignal.timeout(15_000),
+        headers: {
+          authorization: `Bearer ${keeperHubApiKey}`,
+          'content-type': 'application/json',
+          ...options.headers,
+        },
+      });
+      const text = await response.text();
+      let body;
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        body = { raw: text };
+      }
+      if (response.ok) return body;
+      if (response.status !== 429 && response.status < 500) {
+        throw new Error(
+          `KeeperHub ${pathname} returned ${response.status}: ${JSON.stringify(body)}`,
+        );
+      }
+      if (attempt === 4) {
+        throw new Error(
+          `KeeperHub ${pathname} returned ${response.status}: ${JSON.stringify(body)}`,
+        );
+      }
+    } catch (error) {
+      if (attempt === 4) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000 * 2 ** attempt));
   }
-  if (!response.ok) {
-    throw new Error(`KeeperHub ${pathname} returned ${response.status}: ${JSON.stringify(body)}`);
-  }
-  return body;
+  throw new Error(`KeeperHub ${pathname} retry loop ended unexpectedly`);
 }
 
 async function waitForExecution(executionId) {
