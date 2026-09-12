@@ -125,6 +125,10 @@ async function executeContractCall({ label, contractAddress, abi, functionName, 
     headers: { 'idempotency-key': `veto-day1-${chainId}-${label}-v1` },
     body: JSON.stringify(request),
   });
+  fs.writeFileSync(
+    path.join(outputDirectory, `${label}.initial.json`),
+    `${JSON.stringify(initial, null, 2)}\n`,
+  );
   const status = await waitForExecution(initial.executionId);
   if (status.status !== 'completed' || !status.transactionHash) {
     throw new Error(`${label} did not complete: ${JSON.stringify(status)}`);
@@ -145,6 +149,35 @@ async function executeContractCall({ label, contractAddress, abi, functionName, 
   );
   console.log(JSON.stringify(result));
   return result;
+}
+
+async function recoverRecordedResult(label) {
+  const requestPath = path.join(outputDirectory, `${label}.request.json`);
+  const resultPath = path.join(outputDirectory, `${label}.result.json`);
+  if (!fs.existsSync(requestPath) || fs.existsSync(resultPath)) return;
+
+  const request = JSON.parse(fs.readFileSync(requestPath, 'utf8'));
+  const initial = await keeperHubRequest('/api/execute/contract-call', {
+    method: 'POST',
+    headers: { 'idempotency-key': `veto-day1-${chainId}-${label}-v1` },
+    body: JSON.stringify(request),
+  });
+  const status = await waitForExecution(initial.executionId);
+  if (status.status !== 'completed' || !status.transactionHash) {
+    throw new Error(`${label} recovery did not complete: ${JSON.stringify(status)}`);
+  }
+  const receipt = await publicClient.getTransactionReceipt({ hash: status.transactionHash });
+  if (receipt.status !== 'success') throw new Error(`${label} recovered receipt reverted`);
+  const result = {
+    label,
+    executionId: initial.executionId,
+    transactionHash: status.transactionHash,
+    blockNumber: receipt.blockNumber.toString(),
+    gasUsed: receipt.gasUsed.toString(),
+    recoveredByIdempotentReplay: true,
+  };
+  fs.writeFileSync(resultPath, `${JSON.stringify(result, null, 2)}\n`);
+  console.log(JSON.stringify(result));
 }
 
 async function deployWithSingleton(label, initCode, saltLabel) {
@@ -172,6 +205,8 @@ const returnedWallet =
 if (returnedWallet && getAddress(returnedWallet) !== keeperHubWallet) {
   throw new Error(`KeeperHub wallet changed: ${returnedWallet}`);
 }
+
+await recoverRecordedResult('approve-exit-guard');
 
 const factoryInitCode = encodeDeployData({
   abi: controlledFactoryArtifact.abi,
@@ -224,6 +259,41 @@ let shares = await publicClient.readContract({
   functionName: 'balanceOf',
   args: [keeperHubWallet],
 });
+const existingOwnerAssets = await publicClient.readContract({
+  address: fixtureAsset,
+  abi: fixtureAssetArtifact.abi,
+  functionName: 'balanceOf',
+  args: [keeperHubWallet],
+});
+const existingMandateCount = await publicClient.readContract({
+  address: guard,
+  abi: guardArtifact.abi,
+  functionName: 'nextMandateId',
+});
+if (existingMandateCount > 0n) {
+  const existingMandate = await publicClient.readContract({
+    address: guard,
+    abi: guardArtifact.abi,
+    functionName: 'mandates',
+    args: [0n],
+  });
+  if (!existingMandate[7] && shares === 0n && existingOwnerAssets === 10_000_000n) {
+    console.log(
+      JSON.stringify({
+        evidence: 'gate-c-already-complete',
+        chainId,
+        keeperHubWallet,
+        controlledFactory,
+        fixtureVault,
+        fixtureAsset,
+        guard,
+        ownerShares: shares.toString(),
+        ownerAssets: existingOwnerAssets.toString(),
+      }),
+    );
+    process.exit(0);
+  }
+}
 if (shares === 0n) {
   await executeContractCall({
     label: 'approve-fixture-deposit',
