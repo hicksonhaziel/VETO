@@ -1,6 +1,6 @@
 # Gate B — Morpho Vault V2 compatibility
 
-Status: **IN PROGRESS — deployment verified; exact guarded redemption not yet simulated**
+Status: **PASS — real deployment verified and exact guarded redemption proven on a pinned fork**
 
 Checked at: 2026-09-12T16:48:10Z
 
@@ -54,12 +54,24 @@ Several higher-TVL Vault V2 deployments expose a zero timelock for `setManagemen
 VETO no waiting window. This vault uses standard Base USDC and a three-day management-fee timelock.
 Both Base mainnet and Base Sepolia are currently enabled by KeeperHub.
 
-## Remaining work before PASS
+## Guarded redemption proof
 
-1. Build the candidate guard and simulate its exact call against this deployment at a pinned block.
-2. Prove owner-only receipt, finite share allowance, minimum-assets enforcement, and revoked-proposal
-   failure.
-3. Capture a real pending `setManagementFee` proposal or label the public portion as a replay/fork.
+The hardened `VetoExitGuard` was deployed on an Anvil fork of Base block `51221130`. The test
+impersonated the real position owner and curator only inside the fork, queued a controlled 2% annual
+management-fee proposal, and executed the owner-authorized exit through an unrelated relayer.
+
+| Field | Fork result |
+|---|---|
+| Owner | `0xA0894A415c4F246CE95BaE718849579c099Cc1d2` |
+| Shares redeemed | `2956324556913592348497355` |
+| Owner USDC increase | `3077821288866` base units |
+| Relayer USDC balance | `0` |
+| Fork-only guard | `0x742b49cf43083584cb53467b119146ef361b571f` |
+| Fork-only execution | `0x5e186b8c089efac3f64aca37e94bcf73d31c122597152fb055ee8371120080fc` |
+
+The same test proves that a revoked proposal, a removed finite share allowance, an excessive minimum
+asset requirement, and a duplicate execution all fail. The proposal and transaction above exist
+only on the labelled fork; no public curator action or public redemption is claimed.
 
 ## Sources
 

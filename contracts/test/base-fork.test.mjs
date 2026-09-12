@@ -273,6 +273,20 @@ test('owner-only redemption succeeds on the pinned Gauntlet Base deployment', as
   assert(ownerAssetsAfter - ownerAssetsBefore >= expectedAssets - 1n);
   assert.equal(relayerAssets, 0n);
 
+  console.log(
+    JSON.stringify({
+      evidence: 'gate-b-base-fork',
+      forkBlock,
+      vault,
+      guard,
+      owner,
+      sharesRedeemed: shares.toString(),
+      ownerAssetIncrease: (ownerAssetsAfter - ownerAssetsBefore).toString(),
+      relayerAssetBalance: relayerAssets.toString(),
+      executeTransactionHash: executeHash,
+    }),
+  );
+
   await assert.rejects(
     publicClient.simulateContract({
       account: relayer,

@@ -43,6 +43,12 @@ Use Morpho Vault V2's canonical `Submit`, `Revoke`, and `Accept` events as VETO'
 source. Keep the active Glacient in-app monitor as product evidence, but do not claim a completed
 Glacient integration. Revisit **Notify → Webhook** only if Premium access is explicitly approved.
 
+The fallback scanner is implemented in `@veto/morpho-v2`. A live Base read matched the selected
+vault's historical `setManagementFee(0)` submission in transaction
+`0x5b1aa3c141f9ef9189946e823f07eb02ea6ee578f2253b90758ddff1e1bdfcfd` to its acceptance in
+`0xdb86b4c03ab78c33b2ee4fe68dc4baa50f67165e950ba49b5ed515c00879160a`. This validates event
+decoding and lifecycle correlation; it is not evidence of a harmful fee proposal.
+
 ## Public references
 
 - https://glacient.ai/
