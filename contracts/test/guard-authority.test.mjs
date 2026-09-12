@@ -197,6 +197,40 @@ test('authority invariants keep every exit owner-bound, bounded, replaceable, an
     2n,
   );
 
+  const cancelHash = await ownerClient.writeContract({
+    address: guard,
+    abi: guardArtifact.abi,
+    functionName: 'cancel',
+    args: [1n],
+  });
+  await publicClient.waitForTransactionReceipt({ hash: cancelHash });
+  assert.equal(
+    await publicClient.readContract({
+      address: guard,
+      abi: readAbi,
+      functionName: 'activeMandateByOwnerVault',
+      args: [owner, vault],
+    }),
+    0n,
+  );
+  await assert.rejects(
+    publicClient.simulateContract({
+      account: owner,
+      address: guard,
+      abi: guardArtifact.abi,
+      functionName: 'cancel',
+      args: [1n],
+    }),
+  );
+
+  const finalArmHash = await ownerClient.writeContract({
+    address: guard,
+    abi: guardArtifact.abi,
+    functionName: 'arm',
+    args: mandateArgs,
+  });
+  await publicClient.waitForTransactionReceipt({ hash: finalArmHash });
+
   const proposal = encodeFunctionData({
     abi: vaultArtifact.abi,
     functionName: 'setManagementFee',
@@ -249,13 +283,13 @@ test('authority invariants keep every exit owner-bound, bounded, replaceable, an
     address: guard,
     abi: guardArtifact.abi,
     functionName: 'execute',
-    args: [1n, proposal, executableAt],
+    args: [2n, proposal, executableAt],
   });
   const executeHash = await relayerClient.writeContract({
     address: guard,
     abi: guardArtifact.abi,
     functionName: 'execute',
-    args: [1n, proposal, executableAt],
+    args: [2n, proposal, executableAt],
   });
   const executeReceipt = await publicClient.waitForTransactionReceipt({ hash: executeHash });
   assert.equal(executeReceipt.status, 'success');
@@ -300,7 +334,7 @@ test('authority invariants keep every exit owner-bound, bounded, replaceable, an
       address: guard,
       abi: guardArtifact.abi,
       functionName: 'execute',
-      args: [1n, proposal, executableAt],
+      args: [2n, proposal, executableAt],
     }),
   );
 });
