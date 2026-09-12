@@ -71,7 +71,7 @@ Glacient integration. The scanner remains a reconciliation source even if Gate A
 ### B1. Choose the chain before the vault
 
 1. Request `GET https://app.keeperhub.com/api/chains`.
-2. Keep only EVM entries where `isEnabled` is true. Start with an entry where `isTestnet` is also
+2. Keep only entries where `chainType` is `evm` and `isEnabled` is true. Start with an entry where `isTestnet` is also
    true for the controlled execution; separately identify the mainnet on which public Vault V2
    compatibility will be checked.
 3. Record the numeric `chainId`, status, explorer, and RPC source. Do not use a deprecated network
