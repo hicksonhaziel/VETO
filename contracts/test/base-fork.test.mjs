@@ -73,6 +73,11 @@ test('owner-only redemption succeeds on the pinned Gauntlet Base deployment', as
     cacheTime: 0,
   });
   await waitForRpc(publicClient);
+  const pinnedBlock = await publicClient.getBlock({ blockNumber: BigInt(forkBlock) });
+  await publicClient.request({
+    method: 'evm_setNextBlockTimestamp',
+    params: [Number(pinnedBlock.timestamp + 1n)],
+  });
   const [deployer, relayer] = await publicClient.request({ method: 'eth_accounts' });
 
   for (const account of [owner, curator]) {
