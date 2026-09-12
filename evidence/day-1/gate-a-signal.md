@@ -1,6 +1,6 @@
 # Gate A — Glacient signal
 
-Status: **IN PROGRESS — exact event coverage verified; real delivery still required**
+Status: **FALLBACK — exact event exists, but webhook workflow access requires Glacient Premium**
 
 Checked at: 2026-09-12T17:32:00Z
 
@@ -24,20 +24,24 @@ Checked at: 2026-09-12T17:32:00Z
 - Glacient's one-click Risk Manager alert exposes Webapp and Telegram delivery, not Webhook. The
   deployed frontend defines webhook delivery through a custom workflow whose terminal action is
   **Notify** with channel `webhook`; an **Alert** action cannot deliver to webhook.
-- A real queued-management-fee delivery is still required. A test webhook is not sufficient.
+- The signed-in `/canvas` screen identifies the account as Standard and disables new nodes, AI
+  workflow creation, and workflow import behind **Premium Only**. The Morpho V2 upgrade path is
+  presented as **Talk to us**, so there is no authorized, immediate self-service path to a webhook
+  workflow.
+- No plan was purchased and no vendor request was submitted. A real queued-management-fee delivery
+  therefore could not be obtained on Day 1.
 
 ## Current access constraint
 
-The Codex environment has no connected browser session, so the operator is relaying screenshots
-from the authenticated Glacient UI. The exact Risk Manager alert and account webhook are active,
-but they are not connected to each other and no webhook delivery payload has been observed.
+The Standard account can monitor the exact event in Glacient, but cannot connect that monitor to
+the configured account webhook. This is a product entitlement constraint, not an event-coverage or
+receiver-transport failure.
 
 ## Next action
 
-Use Glacient's `/canvas` workflow builder to create a Gauntlet USDC Prime queued-management-fee
-workflow ending in **Notify → Webhook**, then activate it and exercise its delivery path. VETO must
-retain a redacted real delivery and resolve it to the canonical Morpho proposal. The onchain
-`Submit`, `Revoke`, and `Accept` scanner remains the fallback and reconciliation source.
+Use Morpho Vault V2's canonical `Submit`, `Revoke`, and `Accept` events as VETO's primary signal
+source. Keep the active Glacient in-app monitor as product evidence, but do not claim a completed
+Glacient integration. Revisit **Notify → Webhook** only if Premium access is explicitly approved.
 
 ## Public references
 
