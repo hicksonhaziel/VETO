@@ -30,6 +30,7 @@ const managementFeeData = (fee: bigint) =>
 test('decodes only exact setManagementFee calldata', () => {
   assert.equal(decodeManagementFee(managementFeeData(123n)), 123n);
   assert.equal(decodeManagementFee('0x12345678'), undefined);
+  assert.equal(decodeManagementFee(`${managementFeeData(123n)}00`), undefined);
 });
 
 test('tracks submit, revoke, resubmit, and accept independently', () => {

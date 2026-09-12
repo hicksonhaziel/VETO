@@ -1,6 +1,7 @@
 import {
   decodeFunctionData,
   parseAbiItem,
+  size,
   toFunctionSelector,
   type Address,
   type Hex,
@@ -60,7 +61,10 @@ export type ManagementFeeProposal = {
 };
 
 export function decodeManagementFee(data: Hex): bigint | undefined {
-  if (data.slice(0, 10).toLowerCase() !== setManagementFeeSelector.toLowerCase()) {
+  if (
+    size(data) !== 36 ||
+    data.slice(0, 10).toLowerCase() !== setManagementFeeSelector.toLowerCase()
+  ) {
     return undefined;
   }
 
