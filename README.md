@@ -1,5 +1,5 @@
 # VETO
+
 A depositor-controlled exit agent for Morpho Vault V2.
-It detects queued management-fee changes that exceed user limits.
-KeeperHub executes approved exits through an onchain guard.
+It detects excessive queued management fees and executes approved exits through KeeperHub.
 Built for the KeeperHub Agent Economy Hackathon.

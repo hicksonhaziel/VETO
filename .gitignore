@@ -1,3 +1,12 @@
 /plan.md
 /verification.md
 /veto-feasibility/
+
+node_modules/
+.turbo/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log

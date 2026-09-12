@@ -1,0 +1,25 @@
+{
+  "name": "veto",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "workspace:list": "turbo ls"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.2",
+    "prettier": "3.9.6",
+    "turbo": "2.10.12",
+    "typescript": "7.0.2"
+  }
+}
