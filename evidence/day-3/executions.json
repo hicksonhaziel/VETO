@@ -2,6 +2,28 @@
   "recordedAt": "2026-09-13T03:04:42.311Z",
   "environment": "controlled Base Sepolia fixture",
   "chainId": 84532,
+  "scenario": {
+    "owner": "0x3E7A055F59c662987Ae68240Fd713195C30C0497",
+    "factory": "0x6fDe9C612Cbb2A35d783F376BEd0c58bAb1EEbE4",
+    "vault": "0x4425441e908a7Dcc8a7EC56125c24147977a0aC4",
+    "asset": "0xEeae78be065258b11119D43C91c975a92A3aD6dc",
+    "assetName": "VETO Fixture USD",
+    "assetDecimals": 6,
+    "guard": "0x2d55D4c2A101eed8c50B7428A20e486f9db60751",
+    "mandateId": "0",
+    "shares": "10000000",
+    "feeCeilingPercent": "1.00",
+    "minimumAssets": "9999999",
+    "mandateExpiresAt": "1789355060",
+    "safetySeconds": 300,
+    "currentFeePercent": "0.00",
+    "proposedFeePercent": "2.00",
+    "proposalTransactionHash": "0xa1e9e0a6495e57fb24f0b1f00770f8b32ba290b7397b5d853123478fba978573",
+    "proposalBlockNumber": "46750190",
+    "proposalSubmittedAt": "1789268668",
+    "proposalExecutableAt": "1789272268",
+    "exitIncludedAt": "1789268680"
+  },
   "setup": [
     {
       "label": "deploy-controlled-factory",

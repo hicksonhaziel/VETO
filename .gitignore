@@ -3,10 +3,12 @@
 /veto-feasibility/
 
 node_modules/
+.next/
 .turbo/
 .local-data/
 dist/
 coverage/
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
