@@ -1,0 +1,251 @@
+import type { IntentState, ReadyExitIntent } from '@veto/core';
+import { assertTransition } from '@veto/core';
+import { serializeContractCall } from '@veto/keeperhub';
+import type { Pool, PoolClient } from 'pg';
+
+export type StoredExitIntent = ReadyExitIntent & {
+  state: IntentState;
+  serializedRequest: string;
+  executionId?: string;
+  transactionHash?: `0x${string}`;
+  lastError?: string;
+  reconciliation?: Record<string, unknown>;
+  claimedBy?: string;
+  version: number;
+};
+
+type IntentRow = {
+  operation_key: string;
+  chain_id: number;
+  guard_address: `0x${string}`;
+  mandate_id: string;
+  proposal_identity: string;
+  proposal_data: `0x${string}`;
+  expected_executable_at: string;
+  state: IntentState;
+  request_json: ReadyExitIntent['request'];
+  serialized_request: string;
+  idempotency_key: string;
+  execution_id: string | null;
+  transaction_hash: `0x${string}` | null;
+  last_error: string | null;
+  reconciliation_json: Record<string, unknown> | null;
+  claimed_by: string | null;
+  version: string;
+};
+
+function fromRow(row: IntentRow): StoredExitIntent {
+  return {
+    operationKey: row.operation_key,
+    chainId: row.chain_id,
+    guard: row.guard_address,
+    mandateId: row.mandate_id,
+    proposalIdentity: row.proposal_identity,
+    proposalData: row.proposal_data,
+    expectedExecutableAt: row.expected_executable_at,
+    request: row.request_json,
+    idempotencyKey: row.idempotency_key,
+    state: row.state,
+    serializedRequest: row.serialized_request,
+    executionId: row.execution_id ?? undefined,
+    transactionHash: row.transaction_hash ?? undefined,
+    lastError: row.last_error ?? undefined,
+    reconciliation: row.reconciliation_json ?? undefined,
+    claimedBy: row.claimed_by ?? undefined,
+    version: Number(row.version),
+  };
+}
+
+export class PostgresIntentStore {
+  constructor(private readonly pool: Pool) {}
+
+  async applyMigration(sql: string): Promise<void> {
+    await this.pool.query(sql);
+  }
+
+  async createReady(intent: ReadyExitIntent): Promise<boolean> {
+    const serializedRequest = serializeContractCall(intent.request);
+    const result = await this.pool.query(
+      `INSERT INTO exit_intents (
+        operation_key, chain_id, guard_address, mandate_id, proposal_identity,
+        proposal_data, expected_executable_at, state, request_json,
+        serialized_request, idempotency_key
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'READY', $8::jsonb, $9, $10)
+      ON CONFLICT (operation_key) DO NOTHING`,
+      [
+        intent.operationKey,
+        intent.chainId,
+        intent.guard.toLowerCase(),
+        intent.mandateId,
+        intent.proposalIdentity,
+        intent.proposalData.toLowerCase(),
+        intent.expectedExecutableAt,
+        JSON.stringify(intent.request),
+        serializedRequest,
+        intent.idempotencyKey,
+      ],
+    );
+    if (result.rowCount === 1) {
+      await this.pool.query(
+        `INSERT INTO exit_intent_events (operation_key, from_state, to_state, detail_json)
+         VALUES ($1, NULL, 'READY', '{"source":"verified_proposal"}'::jsonb)`,
+        [intent.operationKey],
+      );
+      return true;
+    }
+    return false;
+  }
+
+  async get(operationKey: string): Promise<StoredExitIntent | undefined> {
+    const result = await this.pool.query<IntentRow>(
+      'SELECT * FROM exit_intents WHERE operation_key = $1',
+      [operationKey],
+    );
+    return result.rows[0] ? fromRow(result.rows[0]) : undefined;
+  }
+
+  async claimNext(workerId: string, leaseSeconds = 60): Promise<StoredExitIntent | undefined> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query<IntentRow>(
+        `SELECT * FROM exit_intents
+         WHERE state IN ('READY', 'SIMULATED', 'SUBMITTING', 'PENDING', 'CONFIRMING', 'UNKNOWN', 'RECONCILING', 'DISPUTED')
+           AND (claimed_at IS NULL OR claimed_at < now() - ($1 * interval '1 second'))
+         ORDER BY created_at, operation_key
+         FOR UPDATE SKIP LOCKED
+         LIMIT 1`,
+        [leaseSeconds],
+      );
+      const row = selected.rows[0];
+      if (!row) {
+        await client.query('COMMIT');
+        return undefined;
+      }
+      const claimed = await client.query<IntentRow>(
+        `UPDATE exit_intents
+         SET claimed_by = $2, claimed_at = now(), updated_at = now(), version = version + 1
+         WHERE operation_key = $1
+         RETURNING *`,
+        [row.operation_key, workerId],
+      );
+      await client.query('COMMIT');
+      return fromRow(claimed.rows[0]!);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async transition(
+    operationKey: string,
+    workerId: string,
+    toState: IntentState,
+    patch: {
+      executionId?: string;
+      transactionHash?: `0x${string}`;
+      lastError?: string | null;
+      reconciliation?: Record<string, unknown>;
+      detail?: Record<string, unknown>;
+    } = {},
+  ): Promise<StoredExitIntent> {
+    return this.inTransaction(async (client) => {
+      const selected = await client.query<IntentRow>(
+        'SELECT * FROM exit_intents WHERE operation_key = $1 FOR UPDATE',
+        [operationKey],
+      );
+      const row = selected.rows[0];
+      if (!row) throw new Error('INTENT_NOT_FOUND');
+      if (row.claimed_by !== workerId) throw new Error('INTENT_NOT_CLAIMED_BY_WORKER');
+      assertTransition(row.state, toState);
+
+      const updated = await client.query<IntentRow>(
+        `UPDATE exit_intents SET
+          state = $3,
+          execution_id = COALESCE($4, execution_id),
+          transaction_hash = COALESCE($5, transaction_hash),
+          last_error = CASE WHEN $6::boolean THEN $7 ELSE last_error END,
+          reconciliation_json = COALESCE($8::jsonb, reconciliation_json),
+          updated_at = now(),
+          version = version + 1
+         WHERE operation_key = $1 AND claimed_by = $2
+         RETURNING *`,
+        [
+          operationKey,
+          workerId,
+          toState,
+          patch.executionId ?? null,
+          patch.transactionHash?.toLowerCase() ?? null,
+          patch.lastError !== undefined,
+          patch.lastError ?? null,
+          patch.reconciliation ? JSON.stringify(patch.reconciliation) : null,
+        ],
+      );
+      await client.query(
+        `INSERT INTO exit_intent_events (operation_key, from_state, to_state, detail_json)
+         VALUES ($1, $2, $3, $4::jsonb)`,
+        [operationKey, row.state, toState, JSON.stringify(patch.detail ?? {})],
+      );
+      return fromRow(updated.rows[0]!);
+    });
+  }
+
+  async release(operationKey: string, workerId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE exit_intents
+       SET claimed_by = NULL, claimed_at = NULL, updated_at = now()
+       WHERE operation_key = $1 AND claimed_by = $2`,
+      [operationKey, workerId],
+    );
+  }
+
+  async readCheckpoint(chainId: number, vault: string): Promise<bigint | undefined> {
+    const result = await this.pool.query<{ next_block: string }>(
+      `SELECT next_block FROM scanner_checkpoints
+       WHERE chain_id = $1 AND vault_address = $2`,
+      [chainId, vault.toLowerCase()],
+    );
+    return result.rows[0] ? BigInt(result.rows[0].next_block) : undefined;
+  }
+
+  async saveCheckpoint(options: {
+    chainId: number;
+    vault: string;
+    nextBlock: bigint;
+    lastBlockHash: string;
+  }): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO scanner_checkpoints (
+        chain_id, vault_address, next_block, last_block_hash
+       ) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (chain_id, vault_address) DO UPDATE SET
+         next_block = EXCLUDED.next_block,
+         last_block_hash = EXCLUDED.last_block_hash,
+         updated_at = now()
+       WHERE scanner_checkpoints.next_block <= EXCLUDED.next_block`,
+      [
+        options.chainId,
+        options.vault.toLowerCase(),
+        options.nextBlock.toString(),
+        options.lastBlockHash.toLowerCase(),
+      ],
+    );
+  }
+
+  private async inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await work(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+}

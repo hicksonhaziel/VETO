@@ -9,9 +9,18 @@
     "lint": "tsc --noEmit",
     "start": "tsx src/index.ts",
     "test": "tsx --test test/**/*.test.ts",
+    "test:postgres": "tsx --test test/store.test.ts",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@veto/core": "workspace:*",
+    "@veto/keeperhub": "workspace:*",
+    "@veto/morpho-v2": "workspace:*",
+    "pg": "8.16.3",
+    "viem": "2.56.3"
+  },
   "devDependencies": {
+    "@types/pg": "8.15.5",
     "tsx": "4.23.13"
   }
 }
