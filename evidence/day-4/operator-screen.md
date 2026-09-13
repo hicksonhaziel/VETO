@@ -7,9 +7,10 @@
 
 ## Result
 
-**PASS for the Day 4 operator-screen checkpoint.** A reader can see the depositor position, bounded
-fee rule, queued fee change, exact outcome, and public proof on one responsive page. The hackathon
-demonstration was deliberately excluded from this checkpoint and remains deferred in the plan.
+**PASS for the expanded Day 4 operator-console checkpoint.** A reader can move between Overview,
+Exit rules, Activity, and Evidence; inspect the bounded rule in a drawer; see all nine public
+transactions; and distinguish recorded evidence from unavailable production actions. The hackathon
+demonstration was deliberately excluded and remains deferred in the plan.
 
 ## Screenshots
 
@@ -18,7 +19,8 @@ demonstration was deliberately excluded from this checkpoint and remains deferre
 - Public receipt: [`transaction-proof.jpg`](./transaction-proof.jpg)
 
 The public receipt screenshot is intentionally the unchanged Day 3 exit transaction. Day 4 created
-no new chain transaction.
+no new chain transaction. The refreshed product screenshots show the original VETO identity,
+desktop navigation, and narrow-phone layout.
 
 ## Public receipt
 
@@ -32,6 +34,8 @@ no new chain transaction.
 
 ## Claim boundary
 
-This evidence proves the recorded result can be followed and checked through the screen. It does
-not prove a new Day 4 execution, live Glacient delivery, Morpho mainnet withdrawal, real USDC
-movement, or completion of the deferred hackathon demonstration.
+This evidence proves the recorded result can be followed and checked through the console. The new
+rule drawer is a reviewable draft only: submission is disabled until a supported owner position and
+deployed guard are connected. This does not prove a new Day 4 execution, live Glacient delivery,
+Morpho mainnet withdrawal, real USDC movement, or completion of the deferred hackathon
+demonstration.
