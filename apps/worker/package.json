@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "lint": "tsc --noEmit",
     "start": "tsx src/index.ts",
-    "test": "tsx --test test/**/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 test/**/*.test.ts",
     "test:postgres": "tsx --test test/store.test.ts",
     "typecheck": "tsc --noEmit"
   },
