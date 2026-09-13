@@ -4,6 +4,11 @@
 - Source state: commits `80804be`, `6bb9945`, and `77473ca`
 - Mainnet interaction: none; public deployment was read through a pinned local fork
 - Public execution evidence: unchanged from Day 1 KeeperHub Base Sepolia run
+- Public explorer: [open the reused Day 1 successful transaction](https://base-sepolia.blockscout.com/tx/0x0fdf2a928713da623cfbfb95d6d5ca47be9cd6e058a5c29c6cfa30b0e021584b)
+- Explorer screenshot: [`transaction-proof.jpg`](./transaction-proof.jpg)
+
+The Day 2 screenshot deliberately records the unchanged Day 1 public proof. Day 2's new exit was a
+fork-only simulation, so this file must not be presented as a separate Day 2 public transaction.
 
 ## Result
 

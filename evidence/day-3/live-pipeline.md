@@ -18,6 +18,8 @@ A second pipeline run could not claim or execute the completed intent.
 - KeeperHub execution ID: `j220ikha5alnm38w8asm8`
 - Transaction hash:
   `0xfd35e6e64adb4631b2bcd851789291a8ff000d76b9546b00eee4f602d9a24be2`
+- Public explorer: [open the successful Base Sepolia transaction](https://base-sepolia.blockscout.com/tx/0xfd35e6e64adb4631b2bcd851789291a8ff000d76b9546b00eee4f602d9a24be2)
+- Explorer screenshot: [`transaction-proof.jpg`](./transaction-proof.jpg)
 - Block: `46750196`
 - Block timestamp: `1789268680`
 - Receipt status: success

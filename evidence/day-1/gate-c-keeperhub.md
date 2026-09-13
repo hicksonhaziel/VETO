@@ -51,6 +51,8 @@ fee proposal was then queued with a one-hour timelock.
 - KeeperHub execution ID: `71hffqk5o7i68xphnkoc0`
 - Base Sepolia transaction:
   `0x0fdf2a928713da623cfbfb95d6d5ca47be9cd6e058a5c29c6cfa30b0e021584b`
+- Public explorer: [open the successful Base Sepolia transaction](https://base-sepolia.blockscout.com/tx/0x0fdf2a928713da623cfbfb95d6d5ca47be9cd6e058a5c29c6cfa30b0e021584b)
+- Explorer screenshot: [`transaction-proof.jpg`](./transaction-proof.jpg)
 - Block: `46736449`
 - Gas used: `116130`
 - Independently fetched receipt status: `0x1` (success)
