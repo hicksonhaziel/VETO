@@ -3,10 +3,22 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "scripts": {
-    "gate-c": "node --env-file=../../.env scripts/day1-gate-c.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "gate-c": "node --env-file=../../.env scripts/day1-gate-c.mjs",
+    "lint": "tsc --noEmit",
+    "test": "tsx --test test/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@veto/core": "workspace:*",
     "viem": "2.56.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.2",
+    "tsx": "4.23.13"
   }
 }

@@ -54,9 +54,19 @@ importers:
 
   packages/keeperhub:
     dependencies:
+      '@veto/core':
+        specifier: workspace:*
+        version: link:../core
       viem:
         specifier: 2.56.3
         version: 2.56.3(typescript@7.0.2)
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.2
+        version: 22.20.2
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
 
   packages/morpho-v2:
     dependencies:
