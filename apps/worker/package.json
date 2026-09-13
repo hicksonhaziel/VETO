@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "day3:live": "node --env-file=../../.env scripts/day3-live-pipeline.mjs",
     "dev": "tsx watch src/index.ts",
     "lint": "tsc --noEmit",
     "start": "tsx src/index.ts",
