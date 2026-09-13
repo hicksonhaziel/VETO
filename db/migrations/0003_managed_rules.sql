@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS managed_rules (
   expires_at numeric(78, 0) NOT NULL,
   safety_seconds numeric(78, 0) NOT NULL CHECK (safety_seconds > 0),
   arm_transaction_hash text NOT NULL CHECK (arm_transaction_hash ~ '^0x[0-9a-f]{64}$'),
+  arm_block numeric(78, 0) CHECK (arm_block >= 0),
   state text NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE', 'CANCELLED', 'EXITED')),
   cancel_transaction_hash text CHECK (
     cancel_transaction_hash IS NULL OR cancel_transaction_hash ~ '^0x[0-9a-f]{64}$'
@@ -26,3 +27,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS managed_rules_active_owner_vault
 
 CREATE INDEX IF NOT EXISTS managed_rules_owner_created
   ON managed_rules (owner_address, created_at DESC);
+
+ALTER TABLE managed_rules ADD COLUMN IF NOT EXISTS arm_block numeric(78, 0);
+
+CREATE TABLE IF NOT EXISTS managed_rule_checkpoints (
+  chain_id integer NOT NULL CHECK (chain_id > 0),
+  guard_address text NOT NULL CHECK (guard_address ~ '^0x[0-9a-f]{40}$'),
+  mandate_id numeric(78, 0) NOT NULL CHECK (mandate_id >= 0),
+  next_block numeric(78, 0) NOT NULL CHECK (next_block >= 0),
+  last_block_hash text CHECK (
+    last_block_hash IS NULL OR last_block_hash ~ '^0x[0-9a-f]{64}$'
+  ),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (chain_id, guard_address, mandate_id)
+);

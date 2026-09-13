@@ -16,7 +16,7 @@ const manrope = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'VETO — Verifiable Exit Operator',
+  title: 'VETO',
   description: 'A bounded exit rule for Morpho Vault V2 depositors.',
   icons: { icon: '/brand/veto-mark.png' },
 };

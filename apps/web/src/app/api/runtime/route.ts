@@ -14,7 +14,7 @@ export async function GET() {
       client.getBlockNumber(),
       databaseConfigured()
         ? ensureManagedRulesSchema()
-            .then(() => database().query('SELECT 1'))
+            .then(() => database().query('SELECT 1 FROM managed_rules LIMIT 1'))
             .then(() => 'ready' as const)
             .catch(() => 'unavailable' as const)
         : Promise.resolve('unconfigured' as const),

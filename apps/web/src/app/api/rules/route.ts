@@ -128,8 +128,8 @@ export async function POST(request: NextRequest) {
         `INSERT INTO managed_rules (
           chain_id, factory_address, guard_address, mandate_id, owner_address, vault_address,
           shares, max_fee_per_second, min_assets, expires_at, safety_seconds,
-          arm_transaction_hash, state
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'ACTIVE')
+          arm_transaction_hash, arm_block, state
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'ACTIVE')
         ON CONFLICT (chain_id, guard_address, mandate_id) DO UPDATE SET
           arm_transaction_hash = EXCLUDED.arm_transaction_hash,
           state = 'ACTIVE', updated_at = now()`,
@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
           armed.expiresAt.toString(),
           armed.safetySeconds.toString(),
           transactionHash.toLowerCase(),
+          receipt.blockNumber.toString(),
         ],
       );
       await connection.query('COMMIT');

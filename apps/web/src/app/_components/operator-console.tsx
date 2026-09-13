@@ -2,24 +2,14 @@
 
 import Image from 'next/image';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import transactionProof from '../../../../../evidence/day-3/transaction-proof.jpg';
+import { useVetoWallet, type RuleDraft, type VetoWallet } from './use-veto-wallet';
 import type { dayThreeEvidence } from '@/data/day-three';
 
 type Evidence = typeof dayThreeEvidence;
 type View = 'overview' | 'rules' | 'activity' | 'evidence';
-type EthereumProvider = {
-  on?: (event: 'accountsChanged', listener: (accounts: string[]) => void) => void;
-  removeListener?: (event: 'accountsChanged', listener: (accounts: string[]) => void) => void;
-  request: (request: { method: string }) => Promise<unknown>;
-};
-
-declare global {
-  interface Window {
-    ethereum?: EthereumProvider;
-  }
-}
 
 const navigation: ReadonlyArray<{ view: View; label: string; icon: string }> = [
   { view: 'overview', label: 'Overview', icon: 'grid' },
@@ -92,7 +82,75 @@ function StatusChip({ children, tone = 'neutral' }: { children: ReactNode; tone?
   return <span className={`status-chip status-${tone}`}>{children}</span>;
 }
 
-function Overview({ evidence, openRule }: { evidence: Evidence; openRule: () => void }) {
+function LiveOwnerSurface({
+  wallet,
+  openNewRule,
+}: {
+  wallet: VetoWallet;
+  openNewRule: () => void;
+}) {
+  const shares = Number(wallet.position?.position.shares ?? '0');
+  return (
+    <article className="live-owner-surface">
+      <div className="live-owner-copy">
+        <div className="live-owner-heading">
+          <span className={wallet.runtime?.monitoringReady ? 'readiness ready' : 'readiness'}>
+            <span /> {wallet.runtime?.monitoringReady ? 'Monitoring ready' : 'Checking runtime'}
+          </span>
+          {wallet.runtime ? <small>Block {wallet.runtime.latestBlock}</small> : null}
+        </div>
+        <h2>{wallet.address ? 'Your connected position' : 'Make this protection yours.'}</h2>
+        {wallet.address && wallet.position ? (
+          <p>
+            <strong>
+              {wallet.position.position.sharesFormatted} {wallet.position.position.symbol}
+            </strong>{' '}
+            shares found in the configured supported vault at block{' '}
+            {wallet.position.observedAtBlock}.
+          </p>
+        ) : (
+          <p>
+            Connect the owner wallet to discover its supported vault shares. The wallet signs every
+            approval, rule, and cancellation; VETO never receives the private key.
+          </p>
+        )}
+      </div>
+      <div className="live-owner-actions">
+        {wallet.address ? (
+          <button
+            className="button button-primary"
+            disabled={!wallet.runtime?.monitoringReady || shares <= 0}
+            onClick={openNewRule}
+            type="button"
+          >
+            {shares > 0 ? 'Protect this position' : 'No shares to protect'} <Icon name="arrow" />
+          </button>
+        ) : (
+          <button className="button button-primary" onClick={wallet.connect} type="button">
+            <Icon name="wallet" /> Connect owner wallet
+          </button>
+        )}
+        {wallet.position ? (
+          <ExternalLink href={explorerAddress(wallet.position.position.vault)}>
+            Inspect vault
+          </ExternalLink>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function Overview({
+  evidence,
+  openRule,
+  openNewRule,
+  wallet,
+}: {
+  evidence: Evidence;
+  openRule: () => void;
+  openNewRule: () => void;
+  wallet: VetoWallet;
+}) {
   const recent = evidence.activity.slice(-3).reverse();
 
   return (
@@ -116,12 +174,27 @@ function Overview({ evidence, openRule }: { evidence: Evidence; openRule: () => 
         <p>Base Sepolia fixture · no real asset value · not a Morpho mainnet withdrawal</p>
       </div>
 
+      <LiveOwnerSurface openNewRule={openNewRule} wallet={wallet} />
+
       <section className="command-grid">
         <article className="result-hero">
+          <Image
+            alt=""
+            className="result-art"
+            height={1024}
+            priority
+            src="/brand/veto-exit-path.png"
+            width={1536}
+          />
           <div className="result-hero-top">
             <span className="panel-label">Returned to owner</span>
             <span className="result-seal">
-              <Icon name="check" />
+              <Image
+                alt="Completed bounded exit"
+                height={31}
+                src="/brand/veto-exit-emblem.png"
+                width={31}
+              />
             </span>
           </div>
           <div className="asset-total">
@@ -245,11 +318,14 @@ function Rules({
   evidence,
   openRule,
   openNewRule,
+  wallet,
 }: {
   evidence: Evidence;
   openRule: () => void;
   openNewRule: () => void;
+  wallet: VetoWallet;
 }) {
+  const liveRule = wallet.rules.find((rule) => rule.state === 'ACTIVE');
   return (
     <div className="view-enter">
       <section className="page-intro page-intro-action">
@@ -262,6 +338,55 @@ function Rules({
           <Icon name="plus" /> New exit rule
         </button>
       </section>
+      <article className="surface live-rule-record">
+        <div className="surface-heading">
+          <div>
+            <span className="panel-label">Connected owner</span>
+            <h2>{liveRule ? `Active mandate ${liveRule.mandate_id}` : 'No active live mandate'}</h2>
+          </div>
+          <StatusChip tone={liveRule ? 'verified' : 'neutral'}>
+            {liveRule ? (liveRule.execution_state ?? 'Monitoring') : 'Not armed'}
+          </StatusChip>
+        </div>
+        {wallet.address ? (
+          <div className="live-rule-body">
+            <p>
+              {liveRule
+                ? `The database and chain agree on an owner-bound rule for ${shorten(liveRule.vault_address, 10, 8)}.`
+                : 'The connected address has no rule registered with this VETO runtime.'}
+            </p>
+            {liveRule ? (
+              <button
+                className="button button-danger"
+                disabled={wallet.action.stage === 'cancelling'}
+                onClick={() => void wallet.cancelRule(liveRule.mandate_id)}
+                type="button"
+              >
+                Cancel rule in owner wallet
+              </button>
+            ) : (
+              <button className="button button-secondary" onClick={openNewRule} type="button">
+                Prepare owner rule
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="live-rule-body">
+            <p>Connect the owner wallet to load live rules and cancellation authority.</p>
+            <button className="button button-secondary" onClick={wallet.connect} type="button">
+              Connect wallet
+            </button>
+          </div>
+        )}
+        {wallet.action.stage !== 'idle' ? (
+          <div className={`action-message action-${wallet.action.stage}`} aria-live="polite">
+            {wallet.action.message}
+          </div>
+        ) : null}
+      </article>
+      <div className="recorded-divider">
+        <span>Recorded public evidence</span>
+      </div>
       <article className="surface rule-record">
         <div className="rule-record-top">
           <div className="rule-identity">
@@ -442,13 +567,27 @@ function RuleDrawer({
   evidence,
   mode,
   close,
+  wallet,
 }: {
   evidence: Evidence;
   mode: 'review' | 'new';
   close: () => void;
+  wallet: VetoWallet;
 }) {
   const isNew = mode === 'new';
   const armTransaction = evidence.activity.find((entry) => entry.label === 'Exit rule armed');
+  const [draft, setDraft] = useState<RuleDraft>({
+    feePercent: '1.00',
+    shares: wallet.position?.position.sharesFormatted ?? evidence.instruction.shares,
+    minimumReturn: wallet.position?.position.assetsFormatted ?? evidence.instruction.minimumReturn,
+    expiresHours: '24',
+    safetyMinutes: '5',
+  });
+  const working = ['approving', 'arming', 'registering'].includes(wallet.action.stage);
+
+  function updateDraft(field: keyof RuleDraft, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
 
   return (
     <div
@@ -479,29 +618,31 @@ function RuleDrawer({
         </header>
         <p className="drawer-note">
           {isNew
-            ? 'This prepares a rule for review. On-chain activation remains unavailable until a supported owner position and deployed guard are connected.'
+            ? 'VETO will request two owner transactions: one finite share approval and one bounded rule. The server verifies the receipt before monitoring it.'
             : 'This mandate is already consumed. Values below are read-only and come from the public controlled run.'}
         </p>
         <form className="rule-form" onSubmit={(event) => event.preventDefault()}>
           <label>
             Vault address
-            <input defaultValue={evidence.position.vault} readOnly={!isNew} />
+            <input value={wallet.position?.position.vault ?? evidence.position.vault} readOnly />
           </label>
           <div className="form-grid">
             <label>
               Fee ceiling (%)
               <input
-                defaultValue={isNew ? '1.00' : evidence.instruction.feeCeiling.replace('%', '')}
+                onChange={(event) => updateDraft('feePercent', event.target.value)}
                 inputMode="decimal"
                 readOnly={!isNew}
+                value={isNew ? draft.feePercent : evidence.instruction.feeCeiling.replace('%', '')}
               />
             </label>
             <label>
               Shares to exit
               <input
-                defaultValue={evidence.instruction.shares}
+                onChange={(event) => updateDraft('shares', event.target.value)}
                 inputMode="decimal"
                 readOnly={!isNew}
+                value={isNew ? draft.shares : evidence.instruction.shares}
               />
             </label>
           </div>
@@ -509,19 +650,35 @@ function RuleDrawer({
             <label>
               Minimum return
               <input
-                defaultValue={evidence.instruction.minimumReturn}
+                onChange={(event) => updateDraft('minimumReturn', event.target.value)}
                 inputMode="decimal"
                 readOnly={!isNew}
+                value={isNew ? draft.minimumReturn : evidence.instruction.minimumReturn}
               />
             </label>
             <label>
               Safety window
-              <input defaultValue={evidence.instruction.safetyWindow} readOnly />
+              <input
+                onChange={(event) => updateDraft('safetyMinutes', event.target.value)}
+                inputMode="decimal"
+                readOnly={!isNew}
+                value={isNew ? draft.safetyMinutes : evidence.instruction.safetyWindow}
+              />
             </label>
           </div>
+          {isNew ? (
+            <label>
+              Rule expires after (hours)
+              <input
+                inputMode="numeric"
+                onChange={(event) => updateDraft('expiresHours', event.target.value)}
+                value={draft.expiresHours}
+              />
+            </label>
+          ) : null}
           <label>
             Receiver
-            <input defaultValue={evidence.position.owner} readOnly />
+            <input value={wallet.address ?? evidence.position.owner} readOnly />
             <small>Always fixed to the mandate owner.</small>
           </label>
           <div className="approval-line">
@@ -531,10 +688,43 @@ function RuleDrawer({
               <span>Exact share approval, then arm the guard.</span>
             </div>
           </div>
+          {isNew && wallet.action.stage !== 'idle' ? (
+            <div className={`action-message action-${wallet.action.stage}`} aria-live="polite">
+              {wallet.action.message}
+              {'transactionHash' in wallet.action && wallet.action.transactionHash ? (
+                <ExternalLink href={explorerTransaction(wallet.action.transactionHash)}>
+                  View transaction
+                </ExternalLink>
+              ) : null}
+            </div>
+          ) : null}
           {isNew ? (
-            <button className="button button-primary button-block" disabled type="submit">
-              Connect a supported position to continue
-            </button>
+            wallet.address ? (
+              <button
+                className="button button-primary button-block"
+                disabled={
+                  working ||
+                  !wallet.runtime?.monitoringReady ||
+                  Number(wallet.position?.position.shares ?? '0') <= 0
+                }
+                onClick={() => void wallet.approveAndArm(draft)}
+                type="button"
+              >
+                {working
+                  ? 'Waiting for owner confirmation…'
+                  : wallet.runtime?.monitoringReady
+                    ? 'Approve shares and arm rule'
+                    : 'Monitoring runtime is unavailable'}
+              </button>
+            ) : (
+              <button
+                className="button button-primary button-block"
+                onClick={wallet.connect}
+                type="button"
+              >
+                Connect owner wallet to continue
+              </button>
+            )
           ) : (
             <ExternalLink
               href={explorerTransaction(
@@ -553,19 +743,7 @@ function RuleDrawer({
 export function OperatorConsole({ evidence }: { evidence: Evidence }) {
   const [view, setView] = useState<View>('overview');
   const [drawer, setDrawer] = useState<'review' | 'new'>();
-  const [walletMessage, setWalletMessage] = useState('Connect wallet');
-
-  const receiveAccounts = useCallback((accounts: string[]) => {
-    const next = accounts[0];
-    setWalletMessage(next ? shorten(next) : 'Connect wallet');
-  }, []);
-
-  useEffect(() => {
-    const provider = window.ethereum;
-    if (!provider?.on) return;
-    provider.on('accountsChanged', receiveAccounts);
-    return () => provider.removeListener?.('accountsChanged', receiveAccounts);
-  }, [receiveAccounts]);
+  const wallet = useVetoWallet();
 
   useEffect(() => {
     if (!drawer) return;
@@ -573,19 +751,6 @@ export function OperatorConsole({ evidence }: { evidence: Evidence }) {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [drawer]);
-
-  async function connectWallet() {
-    if (!window.ethereum) {
-      setWalletMessage('Wallet unavailable');
-      return;
-    }
-    try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      receiveAccounts(Array.isArray(accounts) ? accounts.map(String) : []);
-    } catch {
-      setWalletMessage('Connection cancelled');
-    }
-  }
 
   return (
     <main className="app-shell">
@@ -620,20 +785,32 @@ export function OperatorConsole({ evidence }: { evidence: Evidence }) {
           <div className="run-context">
             <span className="live-orb" /> Recorded run <strong>DAY 3 / 001</strong>
           </div>
-          <button className="wallet-button" onClick={connectWallet} type="button">
+          <button className="wallet-button" onClick={wallet.connect} type="button">
             <Icon name="wallet" />
-            <span aria-live="polite">{walletMessage}</span>
+            <span aria-live="polite">{wallet.message}</span>
           </button>
         </header>
         <div className="content-frame">
           {view === 'overview' ? (
-            <Overview evidence={evidence} openRule={() => setDrawer('review')} />
+            <Overview
+              evidence={evidence}
+              openNewRule={() => {
+                wallet.resetAction();
+                setDrawer('new');
+              }}
+              openRule={() => setDrawer('review')}
+              wallet={wallet}
+            />
           ) : null}
           {view === 'rules' ? (
             <Rules
               evidence={evidence}
-              openNewRule={() => setDrawer('new')}
+              openNewRule={() => {
+                wallet.resetAction();
+                setDrawer('new');
+              }}
               openRule={() => setDrawer('review')}
+              wallet={wallet}
             />
           ) : null}
           {view === 'activity' ? <Activity evidence={evidence} /> : null}
@@ -655,7 +832,13 @@ export function OperatorConsole({ evidence }: { evidence: Evidence }) {
         </nav>
       </section>
       {drawer ? (
-        <RuleDrawer close={() => setDrawer(undefined)} evidence={evidence} mode={drawer} />
+        <RuleDrawer
+          close={() => setDrawer(undefined)}
+          evidence={evidence}
+          key={`${drawer}-${wallet.address ?? 'disconnected'}`}
+          mode={drawer}
+          wallet={wallet}
+        />
       ) : null}
     </main>
   );
