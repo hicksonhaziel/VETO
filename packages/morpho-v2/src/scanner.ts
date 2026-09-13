@@ -4,8 +4,10 @@ import {
   size,
   toFunctionSelector,
   type Address,
+  type Chain,
   type Hex,
   type PublicClient,
+  type Transport,
 } from 'viem';
 
 export const submitEvent = parseAbiItem(
@@ -122,8 +124,11 @@ export function reduceManagementFeeLogs(
   return proposals;
 }
 
-export async function scanManagementFeeProposals(options: {
-  client: PublicClient;
+export async function scanManagementFeeProposals<
+  TTransport extends Transport,
+  TChain extends Chain | undefined,
+>(options: {
+  client: PublicClient<TTransport, TChain>;
   vault: Address;
   fromBlock: bigint;
   toBlock?: bigint;

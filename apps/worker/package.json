@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@types/pg": "8.15.5",
+    "@veto/contracts": "workspace:*",
     "tsx": "4.23.13"
   }
 }

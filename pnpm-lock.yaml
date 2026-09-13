@@ -44,6 +44,9 @@ importers:
       '@types/pg':
         specifier: 8.15.5
         version: 8.15.5
+      '@veto/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
       tsx:
         specifier: 4.23.13
         version: 4.23.13

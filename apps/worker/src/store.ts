@@ -14,6 +14,11 @@ export type StoredExitIntent = ReadyExitIntent & {
   version: number;
 };
 
+export type ScannerCheckpoint = {
+  nextBlock: bigint;
+  lastBlockHash?: `0x${string}`;
+};
+
 type IntentRow = {
   operation_key: string;
   chain_id: number;
@@ -202,12 +207,23 @@ export class PostgresIntentStore {
   }
 
   async readCheckpoint(chainId: number, vault: string): Promise<bigint | undefined> {
+    return (await this.getCheckpoint(chainId, vault))?.nextBlock;
+  }
+
+  async getCheckpoint(chainId: number, vault: string): Promise<ScannerCheckpoint | undefined> {
     const result = await this.pool.query<{ next_block: string }>(
-      `SELECT next_block FROM scanner_checkpoints
+      `SELECT next_block, last_block_hash FROM scanner_checkpoints
        WHERE chain_id = $1 AND vault_address = $2`,
       [chainId, vault.toLowerCase()],
     );
-    return result.rows[0] ? BigInt(result.rows[0].next_block) : undefined;
+    const row = result.rows[0] as
+      { next_block: string; last_block_hash: `0x${string}` | null } | undefined;
+    return row
+      ? {
+          nextBlock: BigInt(row.next_block),
+          lastBlockHash: row.last_block_hash ?? undefined,
+        }
+      : undefined;
   }
 
   async saveCheckpoint(options: {
@@ -230,6 +246,40 @@ export class PostgresIntentStore {
         options.vault.toLowerCase(),
         options.nextBlock.toString(),
         options.lastBlockHash.toLowerCase(),
+      ],
+    );
+  }
+
+  async recordProposalDecision(options: {
+    proposalIdentity: string;
+    operationKey: string;
+    chainId: number;
+    vault: string;
+    mandateId: bigint;
+    decision: string;
+    assessment: Record<string, unknown>;
+    sourceBlock: bigint;
+    sourceTransactionHash: string;
+  }): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO proposal_decisions (
+        proposal_identity, operation_key, chain_id, vault_address, mandate_id,
+        decision, assessment_json, source_block, source_transaction_hash
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+       ON CONFLICT (proposal_identity, operation_key) DO UPDATE SET
+         decision = EXCLUDED.decision,
+         assessment_json = EXCLUDED.assessment_json,
+         updated_at = now()`,
+      [
+        options.proposalIdentity,
+        options.operationKey,
+        options.chainId,
+        options.vault.toLowerCase(),
+        options.mandateId.toString(),
+        options.decision,
+        JSON.stringify(options.assessment),
+        options.sourceBlock.toString(),
+        options.sourceTransactionHash.toLowerCase(),
       ],
     );
   }

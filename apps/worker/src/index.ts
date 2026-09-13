@@ -1,3 +1,4 @@
+import { automationConfigFromEnv, startAutomation } from './automation.js';
 import { createReceiver } from './receiver.js';
 
 const port = Number.parseInt(process.env.PORT ?? '8787', 10);
@@ -7,6 +8,9 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   throw new Error('PORT must be an integer between 1 and 65535');
 }
 
+const automation = process.env.DATABASE_URL
+  ? await startAutomation(automationConfigFromEnv(process.env))
+  : undefined;
 const server = createReceiver({ dataDirectory });
 
 server.listen(port, '127.0.0.1', () => {
@@ -15,11 +19,12 @@ server.listen(port, '127.0.0.1', () => {
 
 function shutdown(signal: string) {
   console.info(JSON.stringify({ event: 'worker_stopping', signal }));
-  server.close((error) => {
+  server.close(async (error) => {
     if (error) {
       console.error(error);
       process.exitCode = 1;
     }
+    await automation?.close();
   });
 }
 
