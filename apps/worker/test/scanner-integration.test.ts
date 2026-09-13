@@ -137,13 +137,17 @@ postgresTest(
     const pool = new Pool({ connectionString: databaseUrl });
     context.after(() => pool.end());
     const store = new PostgresIntentStore(pool);
-    for (const migration of ['0001_exit_intents.sql', '0002_proposal_decisions.sql']) {
+    for (const migration of [
+      '0001_exit_intents.sql',
+      '0002_proposal_decisions.sql',
+      '0003_managed_rules.sql',
+    ]) {
       await store.applyMigration(
         await readFile(new URL(`../../../db/migrations/${migration}`, import.meta.url), 'utf8'),
       );
     }
     await pool.query(
-      'TRUNCATE proposal_decisions, exit_intent_events, exit_intents, scanner_checkpoints RESTART IDENTITY',
+      'TRUNCATE proposal_decisions, exit_intent_events, exit_intents, scanner_checkpoints, managed_rule_checkpoints RESTART IDENTITY',
     );
     const config = {
       chainId: base.id,

@@ -14,11 +14,11 @@ postgresTest('deduplicates, leases, transitions, and checkpoints in PostgreSQL',
   const pool = new Pool({ connectionString: databaseUrl });
   const store = new PostgresIntentStore(pool);
   try {
-    const migration = await readFile(
-      new URL('../../../db/migrations/0001_exit_intents.sql', import.meta.url),
-      'utf8',
-    );
-    await store.applyMigration(migration);
+    for (const migration of ['0001_exit_intents.sql', '0003_managed_rules.sql']) {
+      await store.applyMigration(
+        await readFile(new URL(`../../../db/migrations/${migration}`, import.meta.url), 'utf8'),
+      );
+    }
     await pool.query(
       'TRUNCATE exit_intent_events, exit_intents, scanner_checkpoints RESTART IDENTITY',
     );

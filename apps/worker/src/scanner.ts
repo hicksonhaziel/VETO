@@ -28,6 +28,8 @@ const guardReadAbi = [
   },
 ] as const;
 
+const MAX_LOG_BLOCK_RANGE = 9_999n;
+
 function assessmentJson(value: object): Record<string, unknown> {
   return JSON.parse(
     JSON.stringify(value, (_, item: unknown) =>
@@ -69,8 +71,12 @@ export async function scanConfiguredMandate<
   if (latestBlock < config.confirmationDepth) {
     return { proposals: 0, readyCreated: 0, decisionsRecorded: 0, rewoundForReorg: false };
   }
-  const toBlock = latestBlock - config.confirmationDepth;
-  const checkpoint = await store.getCheckpoint(config.chainId, config.vault);
+  const confirmedToBlock = latestBlock - config.confirmationDepth;
+  const checkpoint = await store.getManagedRuleCheckpoint({
+    chainId: config.chainId,
+    guard: config.guard,
+    mandateId: config.mandateId,
+  });
   let fromBlock = checkpoint?.nextBlock ?? config.startBlock;
   let rewoundForReorg = false;
 
@@ -85,6 +91,8 @@ export async function scanConfiguredMandate<
       rewoundForReorg = true;
     }
   }
+  const rangeTip = fromBlock + MAX_LOG_BLOCK_RANGE;
+  const toBlock = rangeTip < confirmedToBlock ? rangeTip : confirmedToBlock;
   if (fromBlock > toBlock) {
     return {
       fromBlock,
@@ -171,9 +179,10 @@ export async function scanConfiguredMandate<
 
   const scannedTip = await client.getBlock({ blockNumber: toBlock });
   if (!scannedTip.hash) throw new Error('SCANNED_BLOCK_HASH_MISSING');
-  await store.saveCheckpoint({
+  await store.saveManagedRuleCheckpoint({
     chainId: config.chainId,
-    vault: config.vault,
+    guard: config.guard,
+    mandateId: config.mandateId,
     nextBlock: toBlock + 1n,
     lastBlockHash: scannedTip.hash,
   });

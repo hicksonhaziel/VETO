@@ -19,6 +19,15 @@ export type ScannerCheckpoint = {
   lastBlockHash?: `0x${string}`;
 };
 
+export type ManagedRule = {
+  chainId: number;
+  factory: `0x${string}`;
+  vault: `0x${string}`;
+  guard: `0x${string}`;
+  mandateId: bigint;
+  startBlock: bigint;
+};
+
 type IntentRow = {
   operation_key: string;
   chain_id: number;
@@ -193,6 +202,13 @@ export class PostgresIntentStore {
          VALUES ($1, $2, $3, $4::jsonb)`,
         [operationKey, row.state, toState, JSON.stringify(patch.detail ?? {})],
       );
+      if (toState === 'EXITED') {
+        await client.query(
+          `UPDATE managed_rules SET state = 'EXITED', updated_at = now()
+           WHERE chain_id = $1 AND guard_address = $2 AND mandate_id = $3`,
+          [row.chain_id, row.guard_address, row.mandate_id],
+        );
+      }
       return fromRow(updated.rows[0]!);
     });
   }
@@ -250,6 +266,54 @@ export class PostgresIntentStore {
     );
   }
 
+  async getManagedRuleCheckpoint(options: {
+    chainId: number;
+    guard: string;
+    mandateId: bigint;
+  }): Promise<ScannerCheckpoint | undefined> {
+    const result = await this.pool.query<{
+      next_block: string;
+      last_block_hash: `0x${string}` | null;
+    }>(
+      `SELECT next_block, last_block_hash FROM managed_rule_checkpoints
+       WHERE chain_id = $1 AND guard_address = $2 AND mandate_id = $3`,
+      [options.chainId, options.guard.toLowerCase(), options.mandateId.toString()],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          nextBlock: BigInt(row.next_block),
+          lastBlockHash: row.last_block_hash ?? undefined,
+        }
+      : undefined;
+  }
+
+  async saveManagedRuleCheckpoint(options: {
+    chainId: number;
+    guard: string;
+    mandateId: bigint;
+    nextBlock: bigint;
+    lastBlockHash: string;
+  }): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO managed_rule_checkpoints (
+        chain_id, guard_address, mandate_id, next_block, last_block_hash
+       ) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (chain_id, guard_address, mandate_id) DO UPDATE SET
+         next_block = EXCLUDED.next_block,
+         last_block_hash = EXCLUDED.last_block_hash,
+         updated_at = now()
+       WHERE managed_rule_checkpoints.next_block <= EXCLUDED.next_block`,
+      [
+        options.chainId,
+        options.guard.toLowerCase(),
+        options.mandateId.toString(),
+        options.nextBlock.toString(),
+        options.lastBlockHash.toLowerCase(),
+      ],
+    );
+  }
+
   async recordProposalDecision(options: {
     proposalIdentity: string;
     operationKey: string;
@@ -282,6 +346,31 @@ export class PostgresIntentStore {
         options.sourceTransactionHash.toLowerCase(),
       ],
     );
+  }
+
+  async listActiveManagedRules(chainId: number): Promise<ManagedRule[]> {
+    const result = await this.pool.query<{
+      chain_id: number;
+      factory_address: `0x${string}`;
+      vault_address: `0x${string}`;
+      guard_address: `0x${string}`;
+      mandate_id: string;
+      arm_block: string;
+    }>(
+      `SELECT chain_id, factory_address, vault_address, guard_address, mandate_id, arm_block
+       FROM managed_rules
+       WHERE chain_id = $1 AND state = 'ACTIVE' AND arm_block IS NOT NULL
+       ORDER BY created_at`,
+      [chainId],
+    );
+    return result.rows.map((row) => ({
+      chainId: row.chain_id,
+      factory: row.factory_address,
+      vault: row.vault_address,
+      guard: row.guard_address,
+      mandateId: BigInt(row.mandate_id),
+      startBlock: BigInt(row.arm_block),
+    }));
   }
 
   private async inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {

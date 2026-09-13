@@ -58,7 +58,7 @@ export function automationConfigFromEnv(environment = process.env): AutomationCo
 
 async function loadMigrations(): Promise<string[]> {
   return Promise.all(
-    ['0001_exit_intents.sql', '0002_proposal_decisions.sql'].map((name) =>
+    ['0001_exit_intents.sql', '0002_proposal_decisions.sql', '0003_managed_rules.sql'].map((name) =>
       readFile(new URL(`../../../db/migrations/${name}`, import.meta.url), 'utf8'),
     ),
   );
@@ -86,16 +86,33 @@ export async function startAutomation(config: AutomationConfig) {
     if (running) return;
     running = true;
     try {
-      const scan = await scanConfiguredMandate({ client, store, config });
+      const registeredRules = await store.listActiveManagedRules(config.chainId);
+      const scanTargets: MorphoScannerConfig[] = [
+        config,
+        ...registeredRules.map((rule) => ({
+          ...rule,
+          confirmationDepth: config.confirmationDepth,
+          reorgRewindBlocks: config.reorgRewindBlocks,
+        })),
+      ].filter(
+        (candidate, index, candidates) =>
+          candidates.findIndex(
+            (other) =>
+              other.guard.toLowerCase() === candidate.guard.toLowerCase() &&
+              other.mandateId === candidate.mandateId,
+          ) === index,
+      );
+      const scans = await Promise.all(
+        scanTargets.map((target) => scanConfiguredMandate({ client, store, config: target })),
+      );
       console.info(
         JSON.stringify({
           event: 'morpho_scan_complete',
-          fromBlock: scan.fromBlock?.toString(),
-          toBlock: scan.toBlock?.toString(),
-          proposals: scan.proposals,
-          readyCreated: scan.readyCreated,
-          decisionsRecorded: scan.decisionsRecorded,
-          rewoundForReorg: scan.rewoundForReorg,
+          targets: scans.length,
+          proposals: scans.reduce((total, scan) => total + scan.proposals, 0),
+          readyCreated: scans.reduce((total, scan) => total + scan.readyCreated, 0),
+          decisionsRecorded: scans.reduce((total, scan) => total + scan.decisionsRecorded, 0),
+          rewoundForReorg: scans.some((scan) => scan.rewoundForReorg),
         }),
       );
       for (let count = 0; count < 50; count += 1) {
