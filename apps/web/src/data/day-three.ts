@@ -3,6 +3,17 @@ import dayThree from '../../../../evidence/day-3/executions.json';
 const scenario = dayThree.scenario;
 const exit = dayThree.exit;
 
+const activityLabels: Record<string, string> = {
+  'deploy-controlled-factory': 'Controlled factory deployed',
+  'deploy-exit-guard': 'Exit guard deployed',
+  'create-fixture': 'Test vault created',
+  'approve-fixture-deposit': 'Deposit approved',
+  'deposit-fixture-assets': 'Position funded',
+  'approve-exit-guard': 'Finite share approval granted',
+  'arm-exit-mandate': 'Exit rule armed',
+  'queue-fee-proposal': '2% fee proposal queued',
+};
+
 function formatFixtureUnits(value: string): string {
   return (Number(value) / 10 ** scenario.assetDecimals).toFixed(scenario.assetDecimals);
 }
@@ -66,6 +77,24 @@ export const dayThreeEvidence = {
     includedAt: formatUtc(scenario.exitIncludedAt),
     duplicateClaimed: exit.duplicateClaimed,
   },
+  activity: [
+    ...dayThree.setup.map((entry) => ({
+      label: activityLabels[entry.label] ?? entry.label,
+      executionId: entry.executionId,
+      transactionHash: entry.transactionHash,
+      blockNumber: entry.blockNumber,
+      gasUsed: Number(entry.gasUsed).toLocaleString('en-US'),
+      kind: entry.label.includes('proposal') ? 'trigger' : 'setup',
+    })),
+    {
+      label: 'Owner exit confirmed',
+      executionId: exit.executionId,
+      transactionHash: exit.transactionHash,
+      blockNumber: exit.blockNumber,
+      gasUsed: Number(exit.gasUsed).toLocaleString('en-US'),
+      kind: 'result',
+    },
+  ],
 } as const;
 
 export function explorerTransaction(hash: string): string {
