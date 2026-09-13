@@ -1,0 +1,74 @@
+{
+  "recordedAt": "2026-09-13T03:04:42.311Z",
+  "environment": "controlled Base Sepolia fixture",
+  "chainId": 84532,
+  "setup": [
+    {
+      "label": "deploy-controlled-factory",
+      "executionId": "al135o2hhmuk92cbukhhs",
+      "transactionHash": "0xc029fdee0738fc3695f54d97eeadfd7600e15095f52ea92e5da36229ee182575",
+      "blockNumber": "46750162",
+      "gasUsed": "1690712"
+    },
+    {
+      "label": "deploy-exit-guard",
+      "executionId": "0dfv68v9zsmuycvjdc7uw",
+      "transactionHash": "0x0b3da15bce705c307783ca8257c152a7a4585934ef541e0b9c1237b560aa2aab",
+      "blockNumber": "46750166",
+      "gasUsed": "1164825"
+    },
+    {
+      "label": "create-fixture",
+      "executionId": "jbj5mz1vw8a6us1d6ywu6",
+      "transactionHash": "0xcbe17dbd81cadb547f9ee68232ceba7050a1ffe44c6cf75437a4b8e0dd0a9409",
+      "blockNumber": "46750172",
+      "gasUsed": "1426385"
+    },
+    {
+      "label": "approve-fixture-deposit",
+      "executionId": "uv1026z7y9d46re4j7qih",
+      "transactionHash": "0x3d5c04ad407537974a101778f632acc50a24f9cc220197398273ee33ac0a0366",
+      "blockNumber": "46750176",
+      "gasUsed": "68394"
+    },
+    {
+      "label": "deposit-fixture-assets",
+      "executionId": "cdymzgqaotor9h7j7n0q3",
+      "transactionHash": "0x712d8468ab244a605035ccd2db47b27feb04009a8b0783200463e358b8549750",
+      "blockNumber": "46750179",
+      "gasUsed": "97259"
+    },
+    {
+      "label": "approve-exit-guard",
+      "executionId": "pxgtwbwjukeo1vuvn423o",
+      "transactionHash": "0x6e8612d5180e2a832150c01b02f7637b445022b4d9fdab60fe2ad490e463941a",
+      "blockNumber": "46750183",
+      "gasUsed": "68384"
+    },
+    {
+      "label": "arm-exit-mandate",
+      "executionId": "oyf9pjhr4awdvoq9z16ah",
+      "transactionHash": "0xca89d8f93d63ff90d5d43ce134b4e7055162bc2ab8f89dd002651913d1f57e84",
+      "blockNumber": "46750186",
+      "gasUsed": "278667"
+    },
+    {
+      "label": "queue-fee-proposal",
+      "executionId": "s8ltphhozk56j67wkwd6w",
+      "transactionHash": "0xa1e9e0a6495e57fb24f0b1f00770f8b32ba290b7397b5d853123478fba978573",
+      "blockNumber": "46750190",
+      "gasUsed": "69870"
+    }
+  ],
+  "exit": {
+    "executionId": "j220ikha5alnm38w8asm8",
+    "transactionHash": "0xfd35e6e64adb4631b2bcd851789291a8ff000d76b9546b00eee4f602d9a24be2",
+    "blockNumber": "46750196",
+    "gasUsed": "125379",
+    "receiptStatus": "success",
+    "ownerShares": "0",
+    "ownerAssets": "10000000",
+    "guardAssets": "0",
+    "duplicateClaimed": false
+  }
+}
