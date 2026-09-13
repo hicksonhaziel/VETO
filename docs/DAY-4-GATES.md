@@ -17,6 +17,11 @@ they have not been removed from `plan.md`.
 | Claims are honest                   | PASS     | Screen says controlled testnet fixture, recorded evidence, no real value, and not Morpho mainnet or real USDC                   |
 | Product navigation                  | PASS     | Overview, Exit rules, Activity, and Evidence views switch in place; rule details open in a keyboard-dismissable drawer          |
 | Desktop and phone rendering         | PASS     | Browser screenshots and narrow-phone overflow/image checks passed                                                               |
+| Live runtime health                 | PASS     | Public chain block, configured contracts, migrations, and PostgreSQL readiness are checked by `/api/runtime`                    |
+| Owner position discovery            | PASS     | Connected addresses are read from Base Sepolia; unsupported or zero-share positions cannot arm a rule                           |
+| Owner signing and cancellation      | PASS     | The browser wallet owns the finite approval, guard arming, and cancellation transactions                                        |
+| Verified rule registration          | PASS     | The server validates successful guard receipts and matching events before writing PostgreSQL state                              |
+| Multi-rule worker discovery         | PASS     | Stored active rules receive independent checkpoints and bounded RPC log scans                                                   |
 | Hackathon demonstration             | DEFERRED | Excluded from this checkpoint by the builder; the plan remains intact                                                           |
 
 ## User flow
@@ -30,8 +35,8 @@ they have not been removed from `plan.md`.
 4. Open **Activity** to follow all nine KeeperHub-submitted transactions from deployment through
    exit.
 5. Open **Evidence** to inspect the receipt and follow the exact transaction to Blockscout.
-6. Optionally connect a browser wallet. The current screen only identifies the address; it does not
-   request a signature or create a transaction.
+6. Optionally connect a browser wallet holding supported vault shares. The screen reads the live
+   position and, after explicit review, requests the finite approval and guard-arm signatures.
 
 ## Verification performed
 
@@ -47,18 +52,24 @@ they have not been removed from `plan.md`.
 - Rule drawer opens and closes with Escape: PASS
 - Unsupported new-rule submission remains disabled: PASS
 - Activity rows linked to public receipts: nine
+- Live Base Sepolia runtime API: PASS
+- PostgreSQL migration/readiness check: PASS
+- Public RPC 10,000-block limit handled with 9,999-block chunks: PASS
+- Worker suite with PostgreSQL and pinned Morpho fork: seven passed, zero skipped
 
-The rendered evidence is static apart from navigation, the rule drawer, editable draft fields, and
-optional wallet connection. It imports the committed Day 3 evidence record and receipt screenshot
-at build time; it does not invent live worker or database status.
+The recorded Day 3 outcome and receipt remain an immutable evidence fixture. Runtime health,
+connected-owner positions, registered rules, and execution state are read from the public chain and
+PostgreSQL; the screen does not represent those live values with fabricated placeholders.
 
 ## Deferred, not removed
 
 - The adverse demonstration cases and four-minute hackathon walkthrough in plan section 13.
-- A live database-backed intent view.
-- Transaction creation, mandate arming, and cancellation from the web screen.
 - A real Glacient delivery claim.
 - Morpho mainnet asset movement or real USDC.
 
-These items remain future work. The current console is a high-fidelity product shell and honest
-evidence reader, not yet a control panel that can move funds.
+Live database state, owner signing, mandate arming, cancellation, and worker discovery are now
+implemented for the controlled Base Sepolia runtime. They are not claimed as a Morpho mainnet
+deployment.
+
+These items remain future work. The current console is a functional controlled-testnet control
+panel and honest evidence reader; it is not presented as a Morpho mainnet or production-money app.

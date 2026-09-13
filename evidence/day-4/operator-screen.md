@@ -9,8 +9,9 @@
 
 **PASS for the expanded Day 4 operator-console checkpoint.** A reader can move between Overview,
 Exit rules, Activity, and Evidence; inspect the bounded rule in a drawer; see all nine public
-transactions; and distinguish recorded evidence from unavailable production actions. The hackathon
-demonstration was deliberately excluded and remains deferred in the plan.
+transactions; and distinguish the recorded outcome from live connected-owner state. Runtime
+health, owner position reads, owner signing, verified PostgreSQL registration, cancellation, and
+worker rule discovery are implemented. The hackathon demonstration remains deferred in the plan.
 
 ## Screenshots
 
@@ -18,8 +19,10 @@ demonstration was deliberately excluded and remains deferred in the plan.
 - Phone: [`operator-screen-mobile.jpg`](./operator-screen-mobile.jpg)
 - Public receipt: [`transaction-proof.jpg`](./transaction-proof.jpg)
 
-The public receipt screenshot is intentionally the unchanged Day 3 exit transaction. Day 4 created
-no new chain transaction. The refreshed product screenshots show the original VETO identity,
+The public receipt screenshot is intentionally the unchanged Day 3 exit transaction. This UI and
+worker checkpoint created no new chain transaction because the recorded owner has zero shares after
+the successful exit and the automated browser has no injected owner wallet. The refreshed product
+screenshots show live runtime readiness, the original VETO identity, branded 2D exit artwork,
 desktop navigation, and narrow-phone layout.
 
 ## Public receipt
@@ -35,7 +38,7 @@ desktop navigation, and narrow-phone layout.
 ## Claim boundary
 
 This evidence proves the recorded result can be followed and checked through the console. The new
-rule drawer is a reviewable draft only: submission is disabled until a supported owner position and
-deployed guard are connected. This does not prove a new Day 4 execution, live Glacient delivery,
-Morpho mainnet withdrawal, real USDC movement, or completion of the deferred hackathon
-demonstration.
+rule drawer creates real owner-signed calls when an injected wallet holds supported shares and the
+monitoring runtime is healthy; otherwise it refuses activation. This does not prove a new Day 4
+execution, live Glacient delivery, Morpho mainnet withdrawal, real USDC movement, or completion of
+the deferred hackathon demonstration.
