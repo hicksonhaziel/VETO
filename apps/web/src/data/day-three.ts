@@ -1,4 +1,5 @@
 import dayThree from '../../../../evidence/day-5/executions.json';
+import revokedProposal from '../../../../evidence/day-6/executions.json';
 
 const scenario = dayThree.scenario;
 const exit = dayThree.exit;
@@ -89,6 +90,20 @@ export const dayThreeEvidence = {
     gasUsed: Number(exit.gasUsed).toLocaleString('en-US'),
     includedAt: formatUtc(scenario.exitIncludedAt),
     duplicateClaimed: exit.duplicateClaimed,
+  },
+  revokedProposal: {
+    mandateId: revokedProposal.scenario.mandateId,
+    executionId: revokedProposal.transactions.rejectionProof.executionId,
+    transactionHash: revokedProposal.transactions.rejectionProof.transactionHash,
+    blockNumber: revokedProposal.transactions.rejectionProof.blockNumber,
+    proposedFee: '2.00%',
+    ownerShares: formatShares(revokedProposal.balancesAfterGuardRejection.ownerShares),
+    vaultAssets: formatFixtureUnits(revokedProposal.balancesAfterGuardRejection.vaultAssets),
+    guardAssets: formatFixtureUnits(revokedProposal.balancesAfterGuardRejection.guardAssets),
+    revertName: revokedProposal.scenario.expectedRevertName,
+    workerState: revokedProposal.result.workerState,
+    balancesUnchanged: revokedProposal.result.balancesUnchanged,
+    mandateStillActive: revokedProposal.result.mandateStillActive,
   },
   activity: [
     ...dayThree.setup.map((entry) => ({

@@ -557,7 +557,7 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
           <h1>Evidence</h1>
           <p>Use the chain receipt—not this interface—as the final source of truth.</p>
         </div>
-        <StatusChip tone="verified">Receipt success</StatusChip>
+        <StatusChip tone="verified">Two public outcomes</StatusChip>
       </section>
       <section className="evidence-grid">
         <article className="surface evidence-facts">
@@ -619,13 +619,50 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
             Open Blockscout receipt
           </ExternalLink>
         </article>
+        <article className="surface evidence-facts">
+          <span className="panel-label">Stale instruction rejected</span>
+          <h2>Revocation held at execution</h2>
+          <p>
+            The 2% proposal passed detection and simulation, then was revoked. The guard re-read
+            Morpho state and refused the unchanged prepared call.
+          </p>
+          <dl>
+            <div>
+              <dt>Guard result</dt>
+              <dd>{evidence.revokedProposal.revertName}</dd>
+            </div>
+            <div>
+              <dt>KeeperHub ID</dt>
+              <dd>{evidence.revokedProposal.executionId}</dd>
+            </div>
+            <div>
+              <dt>Owner shares</dt>
+              <dd>{evidence.revokedProposal.ownerShares} unchanged</dd>
+            </div>
+            <div>
+              <dt>Guard balance</dt>
+              <dd>{evidence.revokedProposal.guardAssets}</dd>
+            </div>
+            <div>
+              <dt>Mandate</dt>
+              <dd>{evidence.revokedProposal.mandateStillActive ? 'Still active' : 'Consumed'}</dd>
+            </div>
+            <div>
+              <dt>Worker</dt>
+              <dd>{evidence.revokedProposal.workerState}</dd>
+            </div>
+          </dl>
+          <ExternalLink href={explorerTransaction(evidence.revokedProposal.transactionHash)}>
+            Open rejection proof
+          </ExternalLink>
+        </article>
       </section>
       <div className="truth-statement">
-        <strong>Evidence layers joined</strong>
+        <strong>Execution-time enforcement</strong>
         <p>
-          This public run uses KeeperHub, the production VETO scanner and worker, and an actual
-          Morpho Vault V2 created by a byte-for-byte canonical factory deployment. The asset remains
-          a valueless test token, and this is not a Morpho mainnet withdrawal.
+          One public run exits while the rule remains true. The second preserves every share when
+          the proposal is revoked. Together they show that execution depends on current Morpho
+          state, not a stale alert. The asset remains a valueless test token.
         </p>
       </div>
     </div>
