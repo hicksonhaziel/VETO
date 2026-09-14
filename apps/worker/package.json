@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.build.json",
     "day3:live": "node --env-file=../../.env scripts/day3-live-pipeline.mjs",
     "real-morpho:live": "node --env-file=../../.env scripts/real-morpho-live-pipeline.mjs",
+    "real-morpho:revoked": "node --env-file=../../.env scripts/real-morpho-revoked-pipeline.mjs",
     "dev": "tsx watch src/index.ts",
     "lint": "tsc --noEmit",
     "start": "tsx src/index.ts",
