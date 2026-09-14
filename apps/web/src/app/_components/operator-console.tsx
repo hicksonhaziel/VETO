@@ -63,7 +63,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
       <Image alt="" height={42} priority src="/brand/veto-mark.png" width={42} />
       <div>
         <strong>VETO</strong>
-        {compact ? null : <span>Verifiable exit operator</span>}
+        {compact ? null : <span>Depositor exit control</span>}
       </div>
     </div>
   );
@@ -89,7 +89,15 @@ function LiveOwnerSurface({
   wallet: VetoWallet;
   openNewRule: () => void;
 }) {
-  const shares = Number(wallet.position?.position.shares ?? '0');
+  const shares = BigInt(wallet.position?.position.shares ?? '0');
+  const ownerConnected = Boolean(wallet.address);
+  const positionReady = Boolean(
+    wallet.address &&
+    wallet.runtime?.monitoringReady &&
+    wallet.position?.position.supported &&
+    shares > 0n,
+  );
+  const ruleActive = wallet.rules.some((rule) => rule.state === 'ACTIVE');
   return (
     <article className="live-owner-surface">
       <div className="live-owner-copy">
@@ -99,7 +107,7 @@ function LiveOwnerSurface({
           </span>
           {wallet.runtime ? <small>Block {wallet.runtime.latestBlock}</small> : null}
         </div>
-        <h2>{wallet.address ? 'Your connected position' : 'Make this protection yours.'}</h2>
+        <h2>{wallet.address ? 'Your live exit-rule workspace' : 'Set a live exit rule.'}</h2>
         {wallet.address && wallet.position ? (
           <p>
             <strong>
@@ -110,8 +118,8 @@ function LiveOwnerSurface({
           </p>
         ) : (
           <p>
-            Connect the owner wallet to discover its supported vault shares. The wallet signs every
-            approval, rule, and cancellation; VETO never receives the private key.
+            Connect the owner wallet to discover its supported vault shares and configure the first
+            implemented rule type: a management-fee ceiling. VETO never receives the private key.
           </p>
         )}
       </div>
@@ -119,11 +127,11 @@ function LiveOwnerSurface({
         {wallet.address ? (
           <button
             className="button button-primary"
-            disabled={!wallet.runtime?.monitoringReady || shares <= 0}
+            disabled={!wallet.runtime?.monitoringReady || shares <= 0n}
             onClick={openNewRule}
             type="button"
           >
-            {shares > 0 ? 'Protect this position' : 'No shares to protect'} <Icon name="arrow" />
+            {shares > 0n ? 'Set exit rule' : 'No supported shares'} <Icon name="arrow" />
           </button>
         ) : (
           <button className="button button-primary" onClick={wallet.connect} type="button">
@@ -135,7 +143,40 @@ function LiveOwnerSurface({
             Inspect vault
           </ExternalLink>
         ) : null}
+        {wallet.address ? (
+          <button
+            className="button button-secondary"
+            disabled={wallet.loading}
+            onClick={() => void wallet.refresh()}
+            type="button"
+          >
+            {wallet.loading ? 'Refreshing…' : 'Refresh live state'}
+          </button>
+        ) : null}
       </div>
+      <ol aria-label="Live exit rule setup" className="owner-flow">
+        <li className={ownerConnected ? 'done' : 'current'}>
+          <span>1</span>
+          <div>
+            <strong>Connect owner</strong>
+            <small>{ownerConnected ? 'Wallet connected' : 'Owner signature authority'}</small>
+          </div>
+        </li>
+        <li className={positionReady ? 'done' : ownerConnected ? 'current' : ''}>
+          <span>2</span>
+          <div>
+            <strong>Verify position</strong>
+            <small>{positionReady ? 'Vault and monitor ready' : 'Supported shares required'}</small>
+          </div>
+        </li>
+        <li className={ruleActive ? 'done' : positionReady ? 'current' : ''}>
+          <span>3</span>
+          <div>
+            <strong>Approve and arm</strong>
+            <small>{ruleActive ? 'Rule is monitored' : 'Two owner transactions'}</small>
+          </div>
+        </li>
+      </ol>
     </article>
   );
 }
@@ -157,16 +198,14 @@ function Overview({
     <div className="view-enter">
       <section className="page-intro">
         <div>
-          <span className="overline">Position command</span>
-          <h1>Exit completed.</h1>
+          <span className="overline">Depositor-controlled exits</span>
+          <h1>Your right to leave before the rules change.</h1>
           <p>
-            VETO moved before the proposed fee could take effect. The receipt and owner return are
-            independently verifiable.
+            Define when your approved position may remain in a managed vault. KeeperHub submits an
+            eligible exit; the guard independently rechecks your rule onchain before funds move.
           </p>
         </div>
-        <StatusChip tone="verified">
-          <span className="status-dot" /> Receipt reconciled
-        </StatusChip>
+        <StatusChip>Execution-time enforced</StatusChip>
       </section>
 
       <div className="fixture-notice">
@@ -187,7 +226,7 @@ function Overview({
             width={1536}
           />
           <div className="result-hero-top">
-            <span className="panel-label">Returned to owner</span>
+            <span className="panel-label">Recorded return to owner</span>
             <span className="result-seal">
               <Image
                 alt="Completed bounded exit"
@@ -226,7 +265,7 @@ function Overview({
         <article className="surface rule-summary">
           <div className="surface-heading">
             <div>
-              <span className="panel-label">Exit rule</span>
+              <span className="panel-label">Implemented rule type</span>
               <h2>Management fee ceiling</h2>
             </div>
             <StatusChip>Consumed</StatusChip>
@@ -252,7 +291,8 @@ function Overview({
             </div>
           </div>
           <p className="rule-copy">
-            The proposal crossed the owner&apos;s hard ceiling. The mandate authorized exactly{' '}
+            The queued proposal crossed this owner&apos;s chosen ceiling. That is a policy
+            breach—not a claim of curator malice or imminent loss. The mandate authorized exactly{' '}
             {evidence.instruction.shares} shares and fixed the receiver to the owner.
           </p>
           <button className="button button-secondary" onClick={openRule} type="button">
@@ -310,6 +350,13 @@ function Overview({
           </ol>
         </article>
       </section>
+      <aside className="liquidity-note">
+        <strong>Authorization is not a liquidity guarantee.</strong>
+        <p>
+          VETO can enforce when an exit is allowed. If the exact redemption cannot execute, the
+          transaction reverts and preserves the position; P0 does not attempt a partial exit.
+        </p>
+      </aside>
     </div>
   );
 }
@@ -332,7 +379,10 @@ function Rules({
         <div>
           <span className="overline">Owner mandates</span>
           <h1>Exit rules</h1>
-          <p>Bounded instructions the relayer can execute but never rewrite.</p>
+          <p>
+            Owner-defined conditions for continued participation. The current implementation
+            supports one rule type: a queued management-fee ceiling.
+          </p>
         </div>
         <button className="button button-primary" onClick={openNewRule} type="button">
           <Icon name="plus" /> New exit rule
@@ -392,7 +442,7 @@ function Rules({
           <div className="rule-identity">
             <span className="rule-index">01</span>
             <div>
-              <span className="panel-label">Management fee</span>
+              <span className="panel-label">Implemented rule · management fee ceiling</span>
               <h2>Exit above {evidence.instruction.feeCeiling}</h2>
             </div>
           </div>
@@ -436,8 +486,9 @@ function Rules({
         <div>
           <strong>Rules are owner-bound</strong>
           <p>
-            KeeperHub can deliver an eligible call, but the guard fixes the receiver, share amount,
-            fee ceiling, minimum return, expiry, and cancellation authority.
+            KeeperHub submits an eligible call, but the guard decides whether it can succeed at
+            execution time. It fixes the receiver, shares, fee ceiling, minimum return, expiry, and
+            cancellation authority. VETO exits the owner; it does not cancel Morpho governance.
           </p>
         </div>
       </aside>
@@ -450,7 +501,7 @@ function Activity({ evidence }: { evidence: Evidence }) {
     <div className="view-enter">
       <section className="page-intro">
         <div>
-          <span className="overline">On-chain history</span>
+          <span className="overline">Recorded on-chain history</span>
           <h1>Activity</h1>
           <p>Nine KeeperHub-submitted transactions from setup through the verified exit.</p>
         </div>
@@ -553,10 +604,11 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
         </article>
       </section>
       <div className="truth-statement">
-        <strong>Claim boundary</strong>
+        <strong>Two evidence layers</strong>
         <p>
           This is a real KeeperHub-submitted Base Sepolia transaction using a controlled, valueless
-          fixture. Real Morpho compatibility is proven separately by pinned Base-fork tests.
+          fixture. Real Morpho compatibility is proven separately by pinned Base-fork tests; this
+          receipt is not a Morpho mainnet exit.
         </p>
       </div>
     </div>
@@ -618,17 +670,21 @@ function RuleDrawer({
         </header>
         <p className="drawer-note">
           {isNew
-            ? 'VETO will request two owner transactions: one finite share approval and one bounded rule. The server verifies the receipt before monitoring it.'
+            ? 'This creates a management-fee ceiling exit rule. VETO requests two owner transactions: one finite share approval and one bounded mandate. The server verifies the receipt before monitoring it.'
             : 'This mandate is already consumed. Values below are read-only and come from the public controlled run.'}
         </p>
         <form className="rule-form" onSubmit={(event) => event.preventDefault()}>
+          <label>
+            Rule type
+            <input value="Queued management fee above ceiling" readOnly />
+          </label>
           <label>
             Vault address
             <input value={wallet.position?.position.vault ?? evidence.position.vault} readOnly />
           </label>
           <div className="form-grid">
             <label>
-              Fee ceiling (%)
+              Management fee ceiling (%)
               <input
                 onChange={(event) => updateDraft('feePercent', event.target.value)}
                 inputMode="decimal"
@@ -687,6 +743,13 @@ function RuleDrawer({
               <strong>Two owner signatures</strong>
               <span>Exact share approval, then arm the guard.</span>
             </div>
+          </div>
+          <div className="liquidity-warning">
+            <strong>Liquidity boundary</strong>
+            <span>
+              This rule authorizes an exact redemption; it cannot guarantee executable vault
+              liquidity and will not automatically submit a partial exit.
+            </span>
           </div>
           {isNew && wallet.action.stage !== 'idle' ? (
             <div className={`action-message action-${wallet.action.stage}`} aria-live="polite">
@@ -783,7 +846,8 @@ export function OperatorConsole({ evidence }: { evidence: Evidence }) {
         <header className="topbar">
           <Brand compact />
           <div className="run-context">
-            <span className="live-orb" /> Recorded run <strong>DAY 3 / 001</strong>
+            <span className="live-orb" /> Live control plane{' '}
+            <strong>{wallet.runtime?.monitoringReady ? 'READY' : 'CHECKING'}</strong>
           </div>
           <button className="wallet-button" onClick={wallet.connect} type="button">
             <Icon name="wallet" />
