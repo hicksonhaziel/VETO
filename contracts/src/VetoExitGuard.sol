@@ -12,7 +12,7 @@ interface IVaultV2 {
     function redeem(uint256 shares, address receiver, address onBehalf) external returns (uint256 assets);
 }
 
-/// @notice Executes one owner-authorized Vault V2 redemption while a harmful management-fee proposal is pending.
+/// @notice Executes one owner-authorized Vault V2 redemption while a policy-breaching fee proposal is pending.
 /// @dev This contract has not been audited. A mandate grants no authority to change its receiver or proposal limits.
 contract VetoExitGuard {
     bytes4 public constant SET_MANAGEMENT_FEE_SELECTOR = bytes4(keccak256("setManagementFee(uint256)"));

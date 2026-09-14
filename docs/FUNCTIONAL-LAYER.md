@@ -1,8 +1,19 @@
 # VETO functional layer
 
-The product now connects the owner-facing dashboard to the deployed Base Sepolia guard, the public
-chain, PostgreSQL rule storage, and the durable KeeperHub worker. Recorded Day 3 evidence remains
-visibly separate from live connected-owner state.
+VETO implements **depositor-controlled, enforceable exit rules for protocol changes**. “Veto” means
+the depositor opts out of continued participation; it does not cancel a Morpho proposal or prevent
+the curator from changing the vault.
+
+The current product connects the owner-facing dashboard to the deployed Base Sepolia guard, the
+public chain, PostgreSQL rule storage, and the durable KeeperHub worker. Recorded Day 3 evidence
+remains visibly separate from live connected-owner state.
+
+## Current policy boundary
+
+The only implemented rule type is a queued Morpho Vault V2 management-fee change above the owner's
+chosen ceiling. It is the first deterministic, queued, machine-verifiable policy—not the entire
+long-term thesis. Crossing the ceiling records a user preference breach; it does not imply curator
+malice, imminent liquidation, or guaranteed avoided loss.
 
 ## Owner flow
 
@@ -21,7 +32,19 @@ visibly separate from live connected-owner state.
    the rule cancelled.
 
 The browser wallet signs owner authority. The KeeperHub organization account is used only by the
-VETO worker when a verified exit becomes eligible. No KeeperHub key is exposed to the browser.
+VETO worker when a verified exit becomes eligible. No KeeperHub key is exposed to the browser, and
+the depositor does not need a KeeperHub account.
+
+## Observation is not authorization
+
+The scanner's assessment and KeeperHub simulation do not grant withdrawal authority. At execution
+time, `VetoExitGuard` independently rechecks the configured vault, current owner mandate, exact
+proposal calldata, fee condition, pending state, expected executable time, mandate expiry, safety
+window, fixed share amount, minimum return, and owner-only receiver. If a proposal was revoked after
+observation, the transaction cannot use the stale decision to redeem.
+
+KeeperHub remains the execution layer. The guard makes that delegated execution trust-minimized by
+constraining what a successful transaction is allowed to do onchain.
 
 ## Runtime surfaces
 
@@ -44,3 +67,13 @@ the configured factory before the two signing actions become available.
 The public Base RPC limits log queries to 10,000 blocks. The worker therefore advances each rule in
 9,999-block chunks and stores a separate checkpoint per guard mandate, preventing one owner's scan
 from skipping another owner's proposal.
+
+VETO can enforce when an exit is authorized; it cannot manufacture executable vault liquidity. P0
+does not attempt an automatic partial exit. If the exact redemption reverts, the transaction leaves
+the owner's position and active mandate unchanged. The worker records the concrete simulation or
+execution failure and must not label it `BLOCKED_LIQUIDITY` without evidence that liquidity was the
+cause.
+
+Real Morpho compatibility and public KeeperHub execution remain separate evidence layers: pinned
+Base-fork tests exercise the deployed Gauntlet USDC Prime Vault V2, while the public KeeperHub
+receipt exercises the full pipeline against a controlled, valueless Base Sepolia fixture.
