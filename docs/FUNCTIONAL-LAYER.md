@@ -5,8 +5,9 @@ the depositor opts out of continued participation; it does not cancel a Morpho p
 the curator from changing the vault.
 
 The current product connects the owner-facing dashboard to the deployed Base Sepolia guard, the
-public chain, PostgreSQL rule storage, and the durable KeeperHub worker. Recorded Day 3 evidence
-remains visibly separate from live connected-owner state.
+public chain, PostgreSQL rule storage, and the durable KeeperHub worker. The recorded centerpiece is
+now the Day 5 execution against canonical Morpho Vault V2 code; recorded evidence remains visibly
+separate from live connected-owner state.
 
 ## Current policy boundary
 
@@ -74,6 +75,9 @@ the owner's position and active mandate unchanged. The worker records the concre
 execution failure and must not label it `BLOCKED_LIQUIDITY` without evidence that liquidity was the
 cause.
 
-Real Morpho compatibility and public KeeperHub execution remain separate evidence layers: pinned
-Base-fork tests exercise the deployed Gauntlet USDC Prime Vault V2, while the public KeeperHub
-receipt exercises the full pipeline against a controlled, valueless Base Sepolia fixture.
+The Day 5 evidence joins real Morpho contract behavior and public KeeperHub execution: a
+byte-for-byte canonical Morpho factory deployed on Base Sepolia created the actual Vault V2 used for
+the deposit, fee proposal, scan, guard execution, redemption, and durable reconciliation. The
+factory is VETO-controlled and the asset is valueless test data, so this is not a Morpho Association
+testnet deployment or a mainnet asset-movement claim. Pinned Base-fork tests remain separate adverse
+evidence against the deployed Gauntlet USDC Prime vault.

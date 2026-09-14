@@ -1,0 +1,156 @@
+{
+  "recordedAt": "2026-09-14T11:03:35.192Z",
+  "environment": "canonical Morpho Vault V2 on Base Sepolia with a valueless test asset",
+  "chainId": 84532,
+  "source": {
+    "repository": "https://github.com/morpho-org/vault-v2",
+    "release": "2025-09-15",
+    "commit": "6f2af6602e05d9e123a87c1067712a4566608044",
+    "factoryRuntimeSha256": "cf0f79d0fb41a563e915b81cefb581f74acb46336cee022c1991671d9e575d8e",
+    "vaultTemplateRuntimeSha256": "e90af065199ce07206bed42cd65b6ecc959bc6cfd7d5889df190d4790af5795b"
+  },
+  "scenario": {
+    "owner": "0x3E7A055F59c662987Ae68240Fd713195C30C0497",
+    "factory": "0x934c8F413D8c5C770259010D5313Bd8bc44432f9",
+    "vault": "0x9019B1e26795E90825c567aD08c945C603e7F9B9",
+    "asset": "0xEeae78be065258b11119D43C91c975a92A3aD6dc",
+    "assetName": "VETO Fixture USD",
+    "assetDecimals": 6,
+    "shareDecimals": 18,
+    "guard": "0xF23824d2ce4e43fA1073896D1F2E898fE47BBE0F",
+    "mandateId": "0",
+    "shares": "10000000000000000000",
+    "feeCeilingPercent": "1.00",
+    "minimumAssets": "10000000",
+    "mandateExpiresAt": "1789470188",
+    "safetySeconds": 300,
+    "currentFeePercent": "0.00",
+    "proposedFeePercent": "2.00",
+    "proposalTransactionHash": "0xbf4209d8d6518ceec294cd7d4abf3c52acab4b1319b018266c100f3e6f601d60",
+    "proposalBlockNumber": "46807756",
+    "proposalSubmittedAt": "1789383800",
+    "proposalExecutableAt": "1789387400",
+    "exitIncludedAt": "1789383812"
+  },
+  "setup": [
+    {
+      "label": "deploy-official-morpho-v2-factory",
+      "executionId": "usc3pcsto887crr2g23st",
+      "transactionHash": "0x7bb36e111599c1bd76548dff083cb27c0b116a4250db964f57edffc481100286",
+      "blockNumber": "46807653",
+      "gasUsed": "5069784"
+    },
+    {
+      "label": "deploy-real-morpho-exit-guard",
+      "executionId": "ghr0orvpq7w47jbr4ewjc",
+      "transactionHash": "0x69d955300a46bbfd5d954e3e4444279d2e36db9f9973b1373885d3abb2493eac",
+      "blockNumber": "46807656",
+      "gasUsed": "1164837"
+    },
+    {
+      "label": "create-official-morpho-v2-vault",
+      "executionId": "1ufskeib0bikd9ski2xgs",
+      "transactionHash": "0x9dd9ef582b48d99f5cd24ab6d6285836d89acca36fa6371f531274367e3e2835",
+      "blockNumber": "46807660",
+      "gasUsed": "4550986"
+    },
+    {
+      "label": "set-vault-curator",
+      "executionId": "o98arokhc9hux7ukgiyph",
+      "transactionHash": "0xab4fafe2f245143398384c0b5961c2709f8a9f4e5eb50510e8d19a2affbbb0e8",
+      "blockNumber": "46807701",
+      "gasUsed": "71241"
+    },
+    {
+      "label": "set-vault-name",
+      "executionId": "37f7qf995857ot1sohs1f",
+      "transactionHash": "0xeb5f48e21da233163b907a9b95668226dea95fd6513cd36fc841f4ef78bcf473",
+      "blockNumber": "46807707",
+      "gasUsed": "72521"
+    },
+    {
+      "label": "set-vault-symbol",
+      "executionId": "0p41s0g6pqbmq338sdp58",
+      "transactionHash": "0x3081d8b20f4a4dd686158aa10ca2949ce2bd408a42e6996399d8016315ec5d2f",
+      "blockNumber": "46807713",
+      "gasUsed": "72124"
+    },
+    {
+      "label": "set-management-fee-recipient-submit",
+      "executionId": "zov94otfdswtn4n11lfk8",
+      "transactionHash": "0xcb61cd231c15c9d1875396f76c301b05cf80f304113e5e10b433877ed74cba08",
+      "blockNumber": "46807720",
+      "gasUsed": "76129"
+    },
+    {
+      "label": "set-management-fee-recipient-execute",
+      "executionId": "imuglu9nrjnre1oivgstn",
+      "transactionHash": "0x378a9db9242a38eaec9a2d24b87e9a86179b6a56c3d960f2d2f8c33b357fc41b",
+      "blockNumber": "46807726",
+      "gasUsed": "92229"
+    },
+    {
+      "label": "configure-management-fee-timelock-submit",
+      "executionId": "kf9w5x45wbudfu176a363",
+      "transactionHash": "0xd1321304f5999f53f2add9fd3b45d10e347266fe9ae1f3f05a79394fa9499573",
+      "blockNumber": "46807730",
+      "gasUsed": "76411"
+    },
+    {
+      "label": "configure-management-fee-timelock-execute",
+      "executionId": "l8y1e3kc0m8dmdb4gf16n",
+      "transactionHash": "0xe7098f3c39c4103c340a7e48ce82f6fa61699df2374f0ab02d0571e030fa150a",
+      "blockNumber": "46807736",
+      "gasUsed": "73474"
+    },
+    {
+      "label": "approve-official-morpho-deposit",
+      "executionId": "mgrj225sz1r0ltvzl88o7",
+      "transactionHash": "0xfcd158626fa154e7aa5622b9fbf4715075e312be7bcaa31e04a1e935cdbc22bf",
+      "blockNumber": "46807739",
+      "gasUsed": "68394"
+    },
+    {
+      "label": "deposit-into-official-morpho-v2",
+      "executionId": "sip4teq68rxq3j9k1oush",
+      "transactionHash": "0xc208295bfea289662f0366366caafe83e427fea8e88b2f073fea6c194c429ef7",
+      "blockNumber": "46807743",
+      "gasUsed": "146229"
+    },
+    {
+      "label": "approve-real-morpho-exit-guard",
+      "executionId": "6oa2h8jmhdiz5kt0naks9",
+      "transactionHash": "0xb9d9eaf7cdce21984b33e8032d7633c3df056bc01e27fd62922987e0922b2987",
+      "blockNumber": "46807749",
+      "gasUsed": "68263"
+    },
+    {
+      "label": "arm-real-morpho-exit-mandate",
+      "executionId": "iaoojry04f42wp2t03jm8",
+      "transactionHash": "0xc47ceb19e1927007fc527a627d929a22348e0343b45842dcad17ed74984c253f",
+      "blockNumber": "46807752",
+      "gasUsed": "278619"
+    },
+    {
+      "label": "queue-real-morpho-fee-proposal",
+      "executionId": "3po1ag2hva6mi3wu09sxf",
+      "transactionHash": "0xbf4209d8d6518ceec294cd7d4abf3c52acab4b1319b018266c100f3e6f601d60",
+      "blockNumber": "46807756",
+      "gasUsed": "75949"
+    }
+  ],
+  "exit": {
+    "executionId": "e6gg1z9q6eb37cd2v6v1w",
+    "transactionHash": "0x6823882c7605922935c902c53efad5ff7c4827e3461d05fe8313116b962ce333",
+    "blockNumber": "46807762",
+    "gasUsed": "153102",
+    "receiptStatus": "success",
+    "ownerShares": "0",
+    "ownerAssets": "10000000",
+    "guardAssets": "0",
+    "vaultAssets": "0",
+    "mandateConsumed": true,
+    "workerState": "EXITED",
+    "duplicateClaimed": false
+  }
+}

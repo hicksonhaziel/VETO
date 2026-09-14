@@ -130,40 +130,41 @@ claim a completed Glacient integration.
 
 ## Current evidence
 
-Real Morpho compatibility and public KeeperHub execution are demonstrated as **separate evidence
-layers**.
+The strongest proof now joins real Morpho contract behavior and public KeeperHub execution in one
+end-to-end Base Sepolia run.
 
-### Real Morpho compatibility
+### Public real-Morpho end to end
 
-The guard, adapter, and scanner are tested against the deployed Gauntlet USDC Prime Vault V2 on a
-pinned Base fork at block `51221130`. The tests verify factory provenance, real proposal semantics,
-owner-only redemption, proposal revocation, missing allowance, excessive minimum return, and replay
-rejection. Fork transactions are deterministic local evidence, not Base mainnet transactions.
-
-### Public KeeperHub execution
-
-The strongest public execution uses the current pipeline and a controlled, valueless Base Sepolia
-fixture:
+VETO deployed Morpho's unmodified Vault V2 `2025-09-15` factory source on Base Sepolia. The compiled
+factory runtime hash exactly matches Morpho's canonical Base factory. That factory created the vault
+used for the public deposit, management-fee proposal, scan, guarded redemption, and reconciliation.
+The asset is deliberately valueless test data; this proves real Morpho Vault V2 semantics without
+risking mainnet funds.
 
 | Field                     | Recorded result                                                                                                                 |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Network                   | Base Sepolia (`84532`)                                                                                                          |
-| KeeperHub execution       | `j220ikha5alnm38w8asm8`                                                                                                         |
-| Transaction               | [`0xfd35e6e…a24be2`](https://base-sepolia.blockscout.com/tx/0xfd35e6e64adb4631b2bcd851789291a8ff000d76b9546b00eee4f602d9a24be2) |
-| Receipt                   | Success, block `46750196`                                                                                                       |
+| Morpho Vault V2           | `0x9019B1e26795E90825c567aD08c945C603e7F9B9`                                                                                    |
+| KeeperHub execution       | `e6gg1z9q6eb37cd2v6v1w`                                                                                                         |
+| Transaction               | [`0x6823882c…ce333`](https://base-sepolia.blockscout.com/tx/0x6823882c7605922935c902c53efad5ff7c4827e3461d05fe8313116b962ce333) |
+| Receipt                   | Success, block `46807762`                                                                                                       |
 | Owner return              | `10.000000` VETO Fixture USD units                                                                                              |
 | Owner shares after        | `0`                                                                                                                             |
 | Guard asset balance after | `0`                                                                                                                             |
+| Worker state              | `EXITED`                                                                                                                        |
 | Duplicate intent claimed  | No                                                                                                                              |
 
-This proves a public KeeperHub-submitted, owner-only controlled-testnet redemption. It does not
-prove that KeeperHub exited a real Morpho mainnet position or moved real USDC.
+The factory is a VETO-controlled public-testnet deployment of canonical Morpho code, not a Morpho
+Association testnet deployment. This does not prove a Morpho mainnet or real-USDC exit. The pinned
+Base fork remains the adverse-test layer against the deployed Gauntlet USDC Prime vault, covering
+revocation, missing allowance, excessive minimum return, and replay rejection.
 
 Further evidence covers PostgreSQL restart recovery, duplicate delivery, worker leasing,
 independent per-mandate scanner checkpoints, proposal/receipt reconciliation, the responsive web
 application, and the unsuccessful Glacient entitlement check. Follow the chronological
 [`Day 1`](docs/DAY-1-GATES.md), [`Day 2`](docs/DAY-2-GATES.md),
 [`Day 3`](docs/DAY-3-GATES.md), and [`Day 4`](docs/DAY-4-GATES.md) records, then read the
+[`real Morpho public proof`](evidence/day-5/real-morpho-v2.md) and
 [`current functional layer`](docs/FUNCTIONAL-LAYER.md).
 
 ## What the web app does
@@ -232,16 +233,21 @@ pnpm --filter @veto/worker start
 pnpm --filter @veto/web dev
 ```
 
-`pnpm --filter @veto/worker day3:live` and the KeeperHub Gate C script make real external testnet
-requests. They require an organization API key, funded or sponsored testnet execution, and explicit
-operator intent. Never commit credentials or funded-wallet secrets.
+`pnpm --filter @veto/worker day3:live`, `pnpm --filter @veto/worker real-morpho:live`, and the
+KeeperHub Gate C script make real external testnet requests. They require an organization API key,
+funded or sponsored testnet execution, and explicit operator intent. Never commit credentials or
+funded-wallet secrets.
 
 ## Limitations
 
 - Management-fee ceiling is the only implemented exit policy.
 - The contracts are unaudited, test-only, and not production-ready.
-- The public KeeperHub proof uses a controlled Base Sepolia vault and valueless asset.
-- Compatibility with a deployed Morpho Vault V2 is currently proven separately on a pinned fork.
+- The public end-to-end proof uses canonical Morpho Vault V2 code with a valueless test asset on
+  Base Sepolia, not real USDC.
+- Its factory is a VETO-controlled deployment of canonical Morpho code, not a Morpho Association
+  testnet deployment.
+- Compatibility and adverse behavior against a Morpho mainnet deployment remain pinned-fork
+  evidence; no public mainnet asset movement is claimed.
 - Glacient webhook delivery and payload authentication are not integrated.
 - The web runtime supports one configured factory, vault, and guard on Base Sepolia.
 - VETO can enforce **when an exit is authorized**. It cannot guarantee that a vault has enough
