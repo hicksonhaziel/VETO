@@ -1,21 +1,32 @@
-import dayThree from '../../../../evidence/day-3/executions.json';
+import dayThree from '../../../../evidence/day-5/executions.json';
 
 const scenario = dayThree.scenario;
 const exit = dayThree.exit;
 
 const activityLabels: Record<string, string> = {
-  'deploy-controlled-factory': 'Controlled factory deployed',
-  'deploy-exit-guard': 'Exit guard deployed',
-  'create-fixture': 'Test vault created',
-  'approve-fixture-deposit': 'Deposit approved',
-  'deposit-fixture-assets': 'Position funded',
-  'approve-exit-guard': 'Finite share approval granted',
-  'arm-exit-mandate': 'Exit rule armed',
-  'queue-fee-proposal': '2% fee proposal queued',
+  'deploy-official-morpho-v2-factory': 'Canonical Morpho V2 factory deployed',
+  'deploy-real-morpho-exit-guard': 'Exit guard deployed',
+  'create-official-morpho-v2-vault': 'Actual Morpho V2 vault created',
+  'set-vault-curator': 'Controlled curator assigned',
+  'set-vault-name': 'Vault name set',
+  'set-vault-symbol': 'Vault symbol set',
+  'set-management-fee-recipient-submit': 'Fee recipient change submitted',
+  'set-management-fee-recipient-execute': 'Fee recipient configured',
+  'configure-management-fee-timelock-submit': 'Fee timelock submitted',
+  'configure-management-fee-timelock-execute': 'One-hour fee timelock configured',
+  'approve-official-morpho-deposit': 'Test deposit approved',
+  'deposit-into-official-morpho-v2': 'Test position deposited',
+  'approve-real-morpho-exit-guard': 'Finite share approval granted',
+  'arm-real-morpho-exit-mandate': 'Exit rule armed',
+  'queue-real-morpho-fee-proposal': '2% Morpho fee proposal queued',
 };
 
 function formatFixtureUnits(value: string): string {
   return (Number(value) / 10 ** scenario.assetDecimals).toFixed(scenario.assetDecimals);
+}
+
+function formatShares(value: string): string {
+  return (Number(value) / 10 ** scenario.shareDecimals).toFixed(6);
 }
 
 function formatUtc(timestamp: string): string {
@@ -39,19 +50,21 @@ export const dayThreeEvidence = {
     id: dayThree.chainId,
     name: 'Base Sepolia',
   },
+  source: dayThree.source,
   position: {
     owner: scenario.owner,
+    factory: scenario.factory,
     vault: scenario.vault,
     asset: scenario.asset,
     assetName: scenario.assetName,
-    sharesBefore: formatFixtureUnits(scenario.shares),
-    sharesAfter: formatFixtureUnits(exit.ownerShares),
+    sharesBefore: formatShares(scenario.shares),
+    sharesAfter: formatShares(exit.ownerShares),
   },
   instruction: {
     mandateId: scenario.mandateId,
     guard: scenario.guard,
     feeCeiling: `${scenario.feeCeilingPercent}%`,
-    shares: formatFixtureUnits(scenario.shares),
+    shares: formatShares(scenario.shares),
     minimumReturn: formatFixtureUnits(scenario.minimumAssets),
     expiresAt: formatUtc(scenario.mandateExpiresAt),
     safetyWindow: `${scenario.safetySeconds / 60} minutes`,

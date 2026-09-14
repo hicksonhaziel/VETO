@@ -4,7 +4,6 @@ import Image from 'next/image';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
-import transactionProof from '../../../../../evidence/day-3/transaction-proof.jpg';
 import { useVetoWallet, type RuleDraft, type VetoWallet } from './use-veto-wallet';
 import type { dayThreeEvidence } from '@/data/day-three';
 
@@ -209,8 +208,11 @@ function Overview({
       </section>
 
       <div className="fixture-notice">
-        <span>Controlled testnet record</span>
-        <p>Base Sepolia fixture · no real asset value · not a Morpho mainnet withdrawal</p>
+        <span>Real Morpho V2 public proof</span>
+        <p>
+          Canonical Morpho Vault V2 code on Base Sepolia · valueless test asset · not a mainnet
+          withdrawal
+        </p>
       </div>
 
       <LiveOwnerSurface openNewRule={openNewRule} wallet={wallet} />
@@ -503,9 +505,12 @@ function Activity({ evidence }: { evidence: Evidence }) {
         <div>
           <span className="overline">Recorded on-chain history</span>
           <h1>Activity</h1>
-          <p>Nine KeeperHub-submitted transactions from setup through the verified exit.</p>
+          <p>
+            {evidence.activity.length} KeeperHub-submitted transactions from canonical deployment
+            through the verified exit.
+          </p>
         </div>
-        <StatusChip tone="verified">9 confirmed</StatusChip>
+        <StatusChip tone="verified">{evidence.activity.length} confirmed</StatusChip>
       </section>
       <article className="surface activity-log">
         {evidence.activity
@@ -555,19 +560,31 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
         <StatusChip tone="verified">Receipt success</StatusChip>
       </section>
       <section className="evidence-grid">
-        <article className="surface receipt-surface">
-          <a
-            href={explorerTransaction(evidence.result.transactionHash)}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <Image
-              alt="Blockscout receipt for the successful controlled VETO exit"
-              placeholder="blur"
-              sizes="(max-width: 800px) 100vw, 60vw"
-              src={transactionProof}
-            />
-          </a>
+        <article className="surface evidence-facts">
+          <span className="panel-label">Contract provenance</span>
+          <h2>Canonical Morpho runtime</h2>
+          <p>
+            Unmodified Morpho Vault V2 release {evidence.source.release}, pinned to commit{' '}
+            {shorten(evidence.source.commit, 12, 8)}. The factory runtime hash exactly matches
+            Morpho&apos;s canonical Base deployment.
+          </p>
+          <dl>
+            <div>
+              <dt>Factory</dt>
+              <dd>{shorten(evidence.position.factory, 12, 8)}</dd>
+            </div>
+            <div>
+              <dt>Vault</dt>
+              <dd>{shorten(evidence.position.vault, 12, 8)}</dd>
+            </div>
+            <div>
+              <dt>Factory recognition</dt>
+              <dd>isVaultV2 = true</dd>
+            </div>
+          </dl>
+          <ExternalLink href={explorerAddress(evidence.position.vault)}>
+            Open Morpho V2 vault
+          </ExternalLink>
         </article>
         <article className="surface evidence-facts">
           <span className="panel-label">Exit receipt</span>
@@ -604,11 +621,11 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
         </article>
       </section>
       <div className="truth-statement">
-        <strong>Two evidence layers</strong>
+        <strong>Evidence layers joined</strong>
         <p>
-          This is a real KeeperHub-submitted Base Sepolia transaction using a controlled, valueless
-          fixture. Real Morpho compatibility is proven separately by pinned Base-fork tests; this
-          receipt is not a Morpho mainnet exit.
+          This public run uses KeeperHub, the production VETO scanner and worker, and an actual
+          Morpho Vault V2 created by a byte-for-byte canonical factory deployment. The asset remains
+          a valueless test token, and this is not a Morpho mainnet withdrawal.
         </p>
       </div>
     </div>
@@ -671,7 +688,7 @@ function RuleDrawer({
         <p className="drawer-note">
           {isNew
             ? 'This creates a management-fee ceiling exit rule. VETO requests two owner transactions: one finite share approval and one bounded mandate. The server verifies the receipt before monitoring it.'
-            : 'This mandate is already consumed. Values below are read-only and come from the public controlled run.'}
+            : 'This mandate is already consumed. Values below are read-only and come from the public real-Morpho run.'}
         </p>
         <form className="rule-form" onSubmit={(event) => event.preventDefault()}>
           <label>
