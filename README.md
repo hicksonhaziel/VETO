@@ -159,12 +159,28 @@ Association testnet deployment. This does not prove a Morpho mainnet or real-USD
 Base fork remains the adverse-test layer against the deployed Gauntlet USDC Prime vault, covering
 revocation, missing allowance, excessive minimum return, and replay rejection.
 
+### Public stale-proposal rejection
+
+The companion run proves the execution-time safety boundary on the same Morpho Vault V2. VETO
+detected and simulated a 2% fee proposal, the curator revoked it, and the guard then returned the
+exact `ProposalIsNotExecutable()` selector. Owner shares and every asset balance remained unchanged,
+the mandate remained active, and the worker recorded `BLOCKED` with
+`PROPOSAL_REVOKED_BEFORE_EXECUTION`.
+
+KeeperHub safely refused to broadcast the direct stale call after its own preflight failed. To make
+the guard decision public, a testnet-only zero-custody recorder forwarded the exact prepared calldata
+and emitted the checked rejection. See the
+[`public rejection transaction`](https://base-sepolia.blockscout.com/tx/0x5456da6a430874eece4ad7ec6dc8752bd8c6b56ba274c5842425be73a4d226f0)
+and [`Day 6 evidence`](evidence/day-6/revoked-proposal.md). The outer recorder receipt succeeds only
+because it catches the expected inner guard revert; it is not a successful exit.
+
 Further evidence covers PostgreSQL restart recovery, duplicate delivery, worker leasing,
 independent per-mandate scanner checkpoints, proposal/receipt reconciliation, the responsive web
 application, and the unsuccessful Glacient entitlement check. Follow the chronological
 [`Day 1`](docs/DAY-1-GATES.md), [`Day 2`](docs/DAY-2-GATES.md),
 [`Day 3`](docs/DAY-3-GATES.md), and [`Day 4`](docs/DAY-4-GATES.md) records, then read the
 [`real Morpho public proof`](evidence/day-5/real-morpho-v2.md) and
+[`public revoked-proposal proof`](evidence/day-6/revoked-proposal.md), followed by the
 [`current functional layer`](docs/FUNCTIONAL-LAYER.md).
 
 ## What the web app does

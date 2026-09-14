@@ -81,3 +81,10 @@ the deposit, fee proposal, scan, guard execution, redemption, and durable reconc
 factory is VETO-controlled and the asset is valueless test data, so this is not a Morpho Association
 testnet deployment or a mainnet asset-movement claim. Pinned Base-fork tests remain separate adverse
 evidence against the deployed Gauntlet USDC Prime vault.
+
+The Day 6 companion execution proves the stale-observation boundary publicly on the same vault.
+After VETO detected and simulated an eligible proposal, the curator revoked it. KeeperHub rejected
+the direct stale submission during preflight, and a testnet-only recorder then forwarded the exact
+prepared calldata to the guard so its `ProposalIsNotExecutable()` rejection could be recorded in a
+public receipt. The recorder requires that exact error and has no custody functions. No shares or
+assets moved, the mandate remained active, and the worker recorded the concrete blocked reason.

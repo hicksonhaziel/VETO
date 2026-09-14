@@ -1,0 +1,83 @@
+{
+  "recordedAt": "2026-09-14T23:39:45.318Z",
+  "environment": "canonical Morpho Vault V2 on Base Sepolia with a valueless test asset",
+  "chainId": 84532,
+  "scenario": {
+    "owner": "0x3E7A055F59c662987Ae68240Fd713195C30C0497",
+    "factory": "0x934c8F413D8c5C770259010D5313Bd8bc44432f9",
+    "vault": "0x9019B1e26795E90825c567aD08c945C603e7F9B9",
+    "guard": "0xF23824d2ce4e43fA1073896D1F2E898fE47BBE0F",
+    "recorder": "0xA0e570CC5Ac6a4323c081E88170573E2Ae011233",
+    "asset": "0xEeae78be065258b11119D43C91c975a92A3aD6dc",
+    "mandateId": "1",
+    "shares": "10000000000000000000",
+    "feeCeilingPerSecond": "317097919",
+    "proposedFeePerSecond": "634195839",
+    "proposalExecutableAtBeforeRevoke": "1789432530",
+    "proposalExecutableAtAfterRevoke": "0",
+    "guardCallHash": "0x04b7857766283362e27121e6a5208b537a2e71454df56cde626578530e3b25b6",
+    "expectedRevertSelector": "0xc0ef4ad5",
+    "expectedRevertName": "ProposalIsNotExecutable"
+  },
+  "transactions": {
+    "deposit": {
+      "executionId": "sfa6zn2y4jgfzti2yb2kn",
+      "transactionHash": "0x59935b492a78332a6203a12095b346473a1dd20ab2d17204d828e2bcc87ca0b6",
+      "blockNumber": "46830308"
+    },
+    "mandate": {
+      "executionId": "h3dhlbb3ka10j77usbdgu",
+      "transactionHash": "0x694757c3627c5f391d6d77df4b755bb304e9fcae816b819a3d72aa799f64a917",
+      "blockNumber": "46830317"
+    },
+    "proposal": {
+      "executionId": "u43ikpgjukjh08gnk3kja",
+      "transactionHash": "0xdd038a4430df78dc427a72f207c91fcf26054454afb5f59be39c01d6b9717d3e",
+      "blockNumber": "46830321"
+    },
+    "revocation": {
+      "executionId": "chsfoirnze2lc2wx85p0e",
+      "transactionHash": "0xc58f06bdf5f68a23f2f5a50ae0783952d5315da324f17f003df72c1fde330854",
+      "blockNumber": "46830327"
+    },
+    "rejectionProof": {
+      "executionId": "bqjr8pzwyx4sd6jcawhfd",
+      "transactionHash": "0x5456da6a430874eece4ad7ec6dc8752bd8c6b56ba274c5842425be73a4d226f0",
+      "blockNumber": "46830444",
+      "gasUsed": "108125",
+      "outerReceiptStatus": "success",
+      "guardReached": true,
+      "guardRejected": true
+    }
+  },
+  "keeperHubPreflight": {
+    "directExecutionId": "bdcnl33bxkwcsowy2g2ze",
+    "state": "failed",
+    "transactionHash": null,
+    "explanation": "KeeperHub did not broadcast the direct call after its post-revocation preflight failed."
+  },
+  "scanner": {
+    "proposalsDetected": 1,
+    "decisionsRecorded": 1,
+    "readyIntentsCreated": 1,
+    "simulationPassedBeforeRevoke": true
+  },
+  "balancesBeforeGuardRejection": {
+    "ownerShares": "10000000000000000000",
+    "ownerAssets": "0",
+    "guardAssets": "0",
+    "vaultAssets": "10000000"
+  },
+  "balancesAfterGuardRejection": {
+    "ownerShares": "10000000000000000000",
+    "ownerAssets": "0",
+    "guardAssets": "0",
+    "vaultAssets": "10000000"
+  },
+  "result": {
+    "balancesUnchanged": true,
+    "mandateStillActive": true,
+    "workerState": "BLOCKED",
+    "workerError": "PROPOSAL_REVOKED_BEFORE_EXECUTION"
+  }
+}
