@@ -1,0 +1,29 @@
+{
+  "recordedAt": "2026-09-15T17:03:32Z",
+  "kind": "authenticated KeeperHub direct check-and-execute dry-run, not a workflow run",
+  "endpoint": "POST /api/execute/check-and-execute",
+  "simulate": true,
+  "chainId": 84532,
+  "vault": "0x9019B1e26795E90825c567aD08c945C603e7F9B9",
+  "check": {
+    "functionName": "executableAt",
+    "proposalFunction": "setManagementFee(uint256)",
+    "proposalFeePerSecond": "634195839",
+    "operator": "eq",
+    "expectedExecutableAt": "1789432530"
+  },
+  "actionIfTrue": "VetoExitGuard.execute(mandate 1, same proposal, expectedExecutableAt)",
+  "httpStatus": 200,
+  "response": {
+    "executed": false,
+    "conditionResult": {
+      "met": false,
+      "observedValue": "0",
+      "targetValue": "1789432530",
+      "operator": "eq"
+    }
+  },
+  "executionId": null,
+  "transactionHash": null,
+  "claimBoundary": "The revoked proposal failed one KeeperHub scalar conditional dry-run. No transaction, workflow execution, or worker routing is claimed."
+}

@@ -9,6 +9,21 @@ remain in the vault. The worker observes a supported queued change and asks Keep
 bounded exit, while `VetoExitGuard` independently rechecks the owner's authorization and the live
 Morpho condition onchain before any shares can move.
 
+**Judge's one-minute path:** [KeeperHub integration map](docs/KEEPERHUB-INTEGRATION.md) →
+[successful real-Morpho exit](evidence/day-5/real-morpho-v2.md) →
+[revoked-proposal rejection](evidence/day-6/revoked-proposal.md). The current financial path is:
+
+```text
+Morpho Vault V2 → VETO scanner/policy → durable worker → KeeperHub direct simulation,
+idempotent submission and status → VetoExitGuard atomic check → Morpho redeem → owner
+                                            ↓
+                              worker receipt/state reconciliation
+```
+
+KeeperHub workflow read/conditional nodes are available to investigate, but **not wired into the
+implemented worker path**. The separate conditional dry-run described in the integration map sent no
+transaction. Do not confuse it with the demonstrated direct execution.
+
 “Veto” does not mean cancelling Morpho governance or preventing a curator from changing a vault.
 The depositor is vetoing **their own continued participation** by leaving.
 
@@ -79,7 +94,7 @@ instead of trusting a stale alert or unconstrained relayer.
 
 ## Why KeeperHub
 
-KeeperHub is VETO's financial execution layer, not an interchangeable notification channel. VETO
+KeeperHub is VETO's managed financial execution layer, not merely a notification channel. VETO
 builds one explicit `VetoExitGuard.execute` contract call, simulates it, persists the serialized
 broadcast body and a stable financial-operation idempotency key, submits it through KeeperHub, and
 polls the resulting execution identity.
@@ -197,8 +212,10 @@ The App Router interface is a controlled-testnet control panel, not only an evid
 8. cancel an active mandate with the owner wallet; and
 9. inspect live rule state separately from recorded transaction evidence.
 
-The recorded Day 3 owner has no shares remaining after its successful exit. Exercising the signing
-flow requires a browser wallet that holds shares in the configured controlled Base Sepolia vault.
+The Day 5 exit evidence records zero owner shares **at that run's end**. The Day 6 revoked-proposal
+experiment later deposited a new 10-share position in the same vault, so that historical Day 5
+balance is not a claim about today's live balance. Exercising the signing flow requires a browser
+wallet that holds shares in the configured controlled Base Sepolia vault.
 
 ## Repository map
 

@@ -5,3 +5,4 @@ coverage
 pnpm-lock.yaml
 evidence
 contracts/**/*.sol
+apps/web/next-env.d.ts
