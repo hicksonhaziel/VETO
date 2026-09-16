@@ -47,6 +47,7 @@ export type MorphoScannerConfig = {
   startBlock: bigint;
   confirmationDepth: bigint;
   reorgRewindBlocks: bigint;
+  executionMode?: 'direct' | 'conditional';
 };
 
 export type ScanResult = {
@@ -152,12 +153,14 @@ export async function scanConfiguredMandate<
       if (verified.eligible) {
         const ready = buildReadyExitIntent({
           chainId: config.chainId,
+          vault: config.vault,
           guard: config.guard,
           mandateId: config.mandateId,
           proposalIdentity: identity,
           proposalData: proposal.data,
           expectedExecutableAt: proposal.executableAt,
           assessment: verified,
+          executionMode: config.executionMode,
         });
         if (await store.createReady(ready)) readyCreated += 1;
       }

@@ -11,6 +11,24 @@ export type KeeperHubExecution = {
   raw: Record<string, unknown>;
 };
 
+export type KeeperHubConditionalRequest = {
+  contractAddress: `0x${string}`;
+  chainId: number;
+  functionName: string;
+  functionArgs: string;
+  abi: string;
+  condition: { operator: 'eq'; value: string };
+  action: ContractCallRequest;
+};
+
+export type KeeperHubConditionalResult =
+  | {
+      executed: false;
+      conditionResult: Record<string, unknown>;
+      raw: Record<string, unknown>;
+    }
+  | ({ executed: true; conditionResult: Record<string, unknown> } & KeeperHubExecution);
+
 type Fetch = typeof globalThis.fetch;
 
 type KeeperHubClientOptions = {
@@ -39,6 +57,18 @@ export function serializeContractCall(request: ContractCallRequest): string {
     functionArgs: request.functionArgs,
     abi: request.abi,
     ...(request.gasLimitMultiplier ? { gasLimitMultiplier: request.gasLimitMultiplier } : {}),
+  });
+}
+
+export function serializeCheckAndExecute(request: KeeperHubConditionalRequest): string {
+  return JSON.stringify({
+    contractAddress: request.contractAddress,
+    chainId: request.chainId,
+    functionName: request.functionName,
+    functionArgs: request.functionArgs,
+    abi: request.abi,
+    condition: request.condition,
+    action: JSON.parse(serializeContractCall(request.action)),
   });
 }
 
@@ -151,6 +181,39 @@ export class KeeperHubClient {
       throw new KeeperHubRequestError('KEEPERHUB_EXECUTION_ID_MISSING');
     }
     return normalizeExecutionStatus(result.executionId, result);
+  }
+
+  async checkAndExecute(
+    serializedRequest: string,
+    idempotencyKey: string,
+    simulate = false,
+  ): Promise<KeeperHubConditionalResult> {
+    const parsed = JSON.parse(serializedRequest) as Record<string, unknown>;
+    const body = JSON.stringify(simulate ? { ...parsed, simulate: true } : parsed);
+    const result = await this.#request('/api/execute/check-and-execute', {
+      method: 'POST',
+      body,
+      idempotencyKey,
+    });
+    const conditionResult =
+      typeof result.conditionResult === 'object' && result.conditionResult !== null
+        ? (result.conditionResult as Record<string, unknown>)
+        : {};
+    if (result.executed === false) return { executed: false, conditionResult, raw: result };
+    if (simulate) {
+      if (result.success !== true || result.wouldRevert === true) {
+        throw new KeeperHubRequestError('KEEPERHUB_CONDITIONAL_SIMULATION_REJECTED');
+      }
+      return { executed: false, conditionResult, raw: result };
+    }
+    if (result.executed !== true || typeof result.executionId !== 'string') {
+      throw new KeeperHubRequestError('KEEPERHUB_CONDITIONAL_RESPONSE_INVALID');
+    }
+    return {
+      executed: true,
+      conditionResult,
+      ...normalizeExecutionStatus(result.executionId, result),
+    };
   }
 
   async getExecution(executionId: string): Promise<KeeperHubExecution> {

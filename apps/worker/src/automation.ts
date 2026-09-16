@@ -19,6 +19,14 @@ type AutomationConfig = MorphoScannerConfig & {
   pollIntervalMs: number;
 };
 
+function executionMode(value: string | undefined): 'direct' | 'conditional' {
+  const mode = value ?? 'conditional';
+  if (mode !== 'direct' && mode !== 'conditional') {
+    throw new Error('INVALID_KEEPERHUB_EXECUTION_MODE');
+  }
+  return mode;
+}
+
 function required(environment: NodeJS.ProcessEnv, name: string): string {
   const value = environment[name];
   if (!value) throw new Error(`MISSING_ENVIRONMENT_VARIABLE:${name}`);
@@ -53,14 +61,18 @@ export function automationConfigFromEnv(environment = process.env): AutomationCo
       environment.VETO_POLL_INTERVAL_MS ?? '15000',
       'VETO_POLL_INTERVAL_MS',
     ),
+    executionMode: executionMode(environment.KEEPERHUB_EXECUTION_MODE),
   };
 }
 
 async function loadMigrations(): Promise<string[]> {
   return Promise.all(
-    ['0001_exit_intents.sql', '0002_proposal_decisions.sql', '0003_managed_rules.sql'].map((name) =>
-      readFile(new URL(`../../../db/migrations/${name}`, import.meta.url), 'utf8'),
-    ),
+    [
+      '0001_exit_intents.sql',
+      '0002_proposal_decisions.sql',
+      '0003_managed_rules.sql',
+      '0004_keeperhub_conditional.sql',
+    ].map((name) => readFile(new URL(`../../../db/migrations/${name}`, import.meta.url), 'utf8')),
   );
 }
 

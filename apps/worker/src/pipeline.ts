@@ -1,4 +1,4 @@
-import type { KeeperHubClient } from '@veto/keeperhub';
+import type { KeeperHubClient, KeeperHubExecution } from '@veto/keeperhub';
 
 import { PostgresIntentStore, type StoredExitIntent } from './store.js';
 
@@ -22,7 +22,7 @@ export class ExitPipeline {
     private readonly store: PostgresIntentStore,
     private readonly keeperHub: Pick<
       KeeperHubClient,
-      'simulateContractCall' | 'submitContractCall' | 'getExecution'
+      'simulateContractCall' | 'submitContractCall' | 'checkAndExecute' | 'getExecution'
     >,
     private readonly reconcile: ExitReconciler,
   ) {}
@@ -34,6 +34,16 @@ export class ExitPipeline {
     try {
       for (let step = 0; step < 10; step += 1) {
         if (intent.state === 'READY') {
+          if (intent.executionMode === 'conditional') {
+            intent = await this.store.transition(intent.operationKey, workerId, 'SIMULATED', {
+              detail: {
+                simulation: 'deferred_to_keeperhub_check_and_execute',
+                reason: 'conditional endpoint performs the authoritative read and action preflight',
+              },
+              lastError: null,
+            });
+            continue;
+          }
           try {
             await this.keeperHub.simulateContractCall(intent.request);
             intent = await this.store.transition(intent.operationKey, workerId, 'SIMULATED', {
@@ -58,17 +68,53 @@ export class ExitPipeline {
 
         if (intent.state === 'SUBMITTING' || intent.state === 'RECONCILING') {
           try {
-            const execution = await this.keeperHub.submitContractCall(
-              intent.serializedRequest,
-              intent.idempotencyKey,
-            );
+            const wasRecovering = intent.state === 'RECONCILING';
+            const conditional = intent.executionMode === 'conditional';
+            if (conditional && !intent.serializedConditionalRequest) {
+              return await this.store.transition(intent.operationKey, workerId, 'DISPUTED', {
+                lastError: 'MISSING_CONDITIONAL_REQUEST',
+                detail: { stage: 'conditional_submission' },
+              });
+            }
+            let execution: KeeperHubExecution;
+            let conditionResult: Record<string, unknown> | undefined;
+            if (conditional) {
+              const result = await this.keeperHub.checkAndExecute(
+                intent.serializedConditionalRequest!,
+                intent.idempotencyKey,
+              );
+              conditionResult = result.conditionResult;
+              if (!result.executed) {
+                return await this.store.transition(intent.operationKey, workerId, 'BLOCKED', {
+                  lastError: 'PROPOSAL_NOT_PENDING_AT_EXECUTION',
+                  reconciliation: {
+                    economicEffect: 'none',
+                    transactionHash: null,
+                    conditionResult,
+                  },
+                  detail: {
+                    stage: 'keeperhub_conditional',
+                    broadcast: false,
+                    conditionResult,
+                  },
+                });
+              }
+              execution = result;
+            } else {
+              execution = await this.keeperHub.submitContractCall(
+                intent.serializedRequest,
+                intent.idempotencyKey,
+              );
+            }
             intent = await this.store.transition(intent.operationKey, workerId, 'PENDING', {
               executionId: execution.executionId,
               transactionHash: execution.transactionHash,
               lastError: null,
               detail: {
-                recovered: intent.state === 'RECONCILING',
+                recovered: wasRecovering,
+                executionMode: intent.executionMode,
                 keeperHubState: execution.state,
+                ...(conditionResult ? { conditionResult } : {}),
               },
             });
             continue;

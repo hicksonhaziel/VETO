@@ -1,0 +1,45 @@
+{
+  "recordedAt": "2026-09-16T08:19:34.098Z",
+  "environment": "Base Sepolia; unmodified Morpho Vault V2 2025-09-15 code from commit 6f2af6602e05d9e123a87c1067712a4566608044; VETO-controlled factory; valueless fixture asset",
+  "executionMode": "conditional",
+  "keeperHubEndpoint": "POST /api/execute/check-and-execute",
+  "chainId": 84532,
+  "factory": "0x934c8F413D8c5C770259010D5313Bd8bc44432f9",
+  "vault": "0x9019B1e26795E90825c567aD08c945C603e7F9B9",
+  "guard": "0xF23824d2ce4e43fA1073896D1F2E898fE47BBE0F",
+  "owner": "0x3E7A055F59c662987Ae68240Fd713195C30C0497",
+  "asset": "0xEeae78be065258b11119D43C91c975a92A3aD6dc",
+  "mandateId": "2",
+  "proposalData": "0xfe56e2320000000000000000000000000000000000000000000000000000000025cd0f7f",
+  "proposedFeePerSecond": "634195839",
+  "expectedExecutableAt": "1789550186",
+  "conditionResult": {
+    "met": true,
+    "observedValue": "1789550186",
+    "targetValue": "1789550186",
+    "operator": "eq"
+  },
+  "keeperHubExecutionId": "35o448zta7uy9dun9j6py",
+  "transactionHash": "0x24bafbb926788884dee9160f4ad723a107b3159e4f5ea03b5b78cf07045c3d6e",
+  "blockNumber": "46889242",
+  "proposalTransactionHash": "0xc7ae56e90d31ff02e8122c33e95baafbadf51f12b11092f8a0788835b8138726",
+  "balances": {
+    "ownerSharesBefore": "10000000000000000000",
+    "ownerSharesAfter": "0",
+    "ownerAssetsBefore": "0",
+    "ownerAssetsAfter": "10000000",
+    "guardAssetsAfter": "0",
+    "vaultAssetsAfter": "0"
+  },
+  "mandateConsumed": true,
+  "duplicateClaimed": false,
+  "workerState": "EXITED",
+  "reconciliation": {
+    "receiptStatus": "success",
+    "proposalMatches": true,
+    "shareAmountMatches": true,
+    "minimumSatisfied": true,
+    "consumed": true
+  },
+  "transitions": ["READY", "SIMULATED", "SUBMITTING", "PENDING", "CONFIRMING", "EXITED"]
+}

@@ -1,0 +1,42 @@
+{
+  "recordedAt": "2026-09-16T08:30:30.673Z",
+  "environment": "Base Sepolia; same VETO-controlled canonical-code Morpho Vault V2 and valueless fixture asset",
+  "executionMode": "conditional",
+  "keeperHubEndpoint": "POST /api/execute/check-and-execute",
+  "chainId": 84532,
+  "vault": "0x9019B1e26795E90825c567aD08c945C603e7F9B9",
+  "guard": "0xF23824d2ce4e43fA1073896D1F2E898fE47BBE0F",
+  "mandateId": "4",
+  "proposalData": "0xfe56e2320000000000000000000000000000000000000000000000000000000025cd0f7f",
+  "expectedExecutableAt": "1789551002",
+  "observedExecutableAtAfterRevocation": "0",
+  "conditionResult": {
+    "met": false,
+    "observedValue": "0",
+    "targetValue": "1789551002",
+    "operator": "eq"
+  },
+  "proposalTransactionHash": "0x9c946a7c665f1ec7b22428c1303cacfd1da93340b3b559b98df0d6b77add27c1",
+  "revocationTransactionHash": "0x60e539ddf306f6803ec9dd6b76c8745e7f77dc20661d2359a73df5f6967f15e5",
+  "conditionalExecutionId": null,
+  "conditionalTransactionHash": null,
+  "conditionalState": "condition-false",
+  "balancesBeforeAndAfter": {
+    "ownerShares": "10000000000000000000",
+    "ownerAssets": "0",
+    "guardAssets": "0",
+    "vaultAssets": "10000000"
+  },
+  "mandateStillActive": true,
+  "workerState": "BLOCKED",
+  "workerReason": "PROPOSAL_NOT_PENDING_AT_EXECUTION",
+  "separateGuardProof": {
+    "explanation": "A separate zero-custody recorder called the same guard calldata and captured the expected inner revert; this is not the conditional financial transaction.",
+    "keeperHubExecutionId": "myp4rpner1li5eskekrfz",
+    "transactionHash": "0x515a928facc28baa3a03dd607d21d38a0a624a3a1ddfd4dafbf734f09556785b",
+    "outerReceiptStatus": "success",
+    "innerRevert": "ProposalIsNotExecutable()",
+    "revertSelector": "0xc0ef4ad5"
+  },
+  "transitions": ["READY", "SIMULATED", "SUBMITTING", "BLOCKED"]
+}

@@ -72,10 +72,12 @@ export function createChainReconciler<
       blockNumber: receipt.blockNumber,
     });
     const proposalMatches = exit.args.proposalHash === keccak256(intent.proposalData);
+    const ownerMatches = getAddress(exit.args.owner) === getAddress(mandate[0]);
     const shareAmountMatches = exit.args.shares === mandate[2];
     const minimumSatisfied = exit.args.assets >= mandate[4];
     const consumed = mandate[7] === false;
-    const ok = proposalMatches && shareAmountMatches && minimumSatisfied && consumed;
+    const ok =
+      proposalMatches && ownerMatches && shareAmountMatches && minimumSatisfied && consumed;
     return {
       ok,
       detail: {
@@ -87,6 +89,7 @@ export function createChainReconciler<
         shares: exit.args.shares.toString(),
         assets: exit.args.assets.toString(),
         proposalMatches,
+        ownerMatches,
         shareAmountMatches,
         minimumSatisfied,
         consumed,

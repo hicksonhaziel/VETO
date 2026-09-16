@@ -14,7 +14,11 @@ postgresTest('deduplicates, leases, transitions, and checkpoints in PostgreSQL',
   const pool = new Pool({ connectionString: databaseUrl });
   const store = new PostgresIntentStore(pool);
   try {
-    for (const migration of ['0001_exit_intents.sql', '0003_managed_rules.sql']) {
+    for (const migration of [
+      '0001_exit_intents.sql',
+      '0003_managed_rules.sql',
+      '0004_keeperhub_conditional.sql',
+    ]) {
       await store.applyMigration(
         await readFile(new URL(`../../../db/migrations/${migration}`, import.meta.url), 'utf8'),
       );

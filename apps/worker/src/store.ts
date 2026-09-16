@@ -1,11 +1,13 @@
 import type { IntentState, ReadyExitIntent } from '@veto/core';
 import { assertTransition } from '@veto/core';
-import { serializeContractCall } from '@veto/keeperhub';
+import { serializeCheckAndExecute, serializeContractCall } from '@veto/keeperhub';
 import type { Pool, PoolClient } from 'pg';
 
 export type StoredExitIntent = ReadyExitIntent & {
   state: IntentState;
   serializedRequest: string;
+  executionMode: 'direct' | 'conditional';
+  serializedConditionalRequest?: string;
   executionId?: string;
   transactionHash?: `0x${string}`;
   lastError?: string;
@@ -39,6 +41,9 @@ type IntentRow = {
   state: IntentState;
   request_json: ReadyExitIntent['request'];
   serialized_request: string;
+  execution_mode: 'direct' | 'conditional';
+  conditional_request_json: ReadyExitIntent['conditionalRequest'] | null;
+  serialized_conditional_request: string | null;
   idempotency_key: string;
   execution_id: string | null;
   transaction_hash: `0x${string}` | null;
@@ -61,6 +66,9 @@ function fromRow(row: IntentRow): StoredExitIntent {
     idempotencyKey: row.idempotency_key,
     state: row.state,
     serializedRequest: row.serialized_request,
+    executionMode: row.execution_mode,
+    conditionalRequest: row.conditional_request_json ?? undefined,
+    serializedConditionalRequest: row.serialized_conditional_request ?? undefined,
     executionId: row.execution_id ?? undefined,
     transactionHash: row.transaction_hash ?? undefined,
     lastError: row.last_error ?? undefined,
@@ -79,12 +87,17 @@ export class PostgresIntentStore {
 
   async createReady(intent: ReadyExitIntent): Promise<boolean> {
     const serializedRequest = serializeContractCall(intent.request);
+    const executionMode = intent.executionMode ?? 'direct';
+    const serializedConditionalRequest = intent.conditionalRequest
+      ? serializeCheckAndExecute(intent.conditionalRequest)
+      : null;
     const result = await this.pool.query(
       `INSERT INTO exit_intents (
         operation_key, chain_id, guard_address, mandate_id, proposal_identity,
         proposal_data, expected_executable_at, state, request_json,
-        serialized_request, idempotency_key
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'READY', $8::jsonb, $9, $10)
+        serialized_request, idempotency_key, execution_mode,
+        conditional_request_json, serialized_conditional_request
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'READY', $8::jsonb, $9, $10, $11, $12::jsonb, $13)
       ON CONFLICT (operation_key) DO NOTHING`,
       [
         intent.operationKey,
@@ -97,6 +110,9 @@ export class PostgresIntentStore {
         JSON.stringify(intent.request),
         serializedRequest,
         intent.idempotencyKey,
+        executionMode,
+        intent.conditionalRequest ? JSON.stringify(intent.conditionalRequest) : null,
+        serializedConditionalRequest,
       ],
     );
     if (result.rowCount === 1) {

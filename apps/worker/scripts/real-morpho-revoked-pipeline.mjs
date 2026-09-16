@@ -21,6 +21,7 @@ import {
 import { baseSepolia } from 'viem/chains';
 
 import { compileOfficialMorphoVaultV2 } from '../../../contracts/scripts/compile-official-morpho-v2.mjs';
+import { ExitPipeline } from '../dist/pipeline.js';
 import { scanConfiguredMandate } from '../dist/scanner.js';
 import { PostgresIntentStore } from '../dist/store.js';
 
@@ -39,12 +40,17 @@ const keeperHubApiKey = process.env.KEEPERHUB_API_KEY;
 const keeperHubBaseUrl = process.env.KEEPERHUB_BASE_URL || 'https://app.keeperhub.com';
 const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org';
 const databaseUrl = process.env.DATABASE_URL;
+const executionMode = process.env.KEEPERHUB_EXECUTION_MODE || 'direct';
+if (!['direct', 'conditional'].includes(executionMode)) {
+  throw new Error('INVALID_KEEPERHUB_EXECUTION_MODE');
+}
 if (!keeperHubApiKey) throw new Error('KEEPERHUB_API_KEY is required');
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, '../../..');
-const outputDirectory = path.join(repositoryRoot, '.local-data', 'real-morpho-revoked');
+const evidenceRun = process.env.VETO_EVIDENCE_RUN || 'real-morpho-revoked';
+const outputDirectory = path.join(repositoryRoot, '.local-data', evidenceRun);
 const evidencePath = path.join(outputDirectory, 'evidence.json');
 fs.mkdirSync(outputDirectory, { recursive: true, mode: 0o700 });
 
@@ -101,7 +107,7 @@ async function setupCall(label, request) {
   await keeperHub.simulateContractCall(request);
   const execution = await keeperHub.submitContractCall(
     serializeContractCall(request),
-    `veto-revoked-${keccak256(new TextEncoder().encode(label)).slice(2, 34)}`,
+    `veto-revoked-${keccak256(new TextEncoder().encode(`${evidenceRun}:${label}`)).slice(2, 34)}`,
   );
   const terminal = await waitForExecution(execution.executionId);
   if (terminal.state !== 'completed' || !terminal.transactionHash) {
@@ -171,8 +177,11 @@ function findRevertData(error) {
 
 if (fs.existsSync(evidencePath)) {
   const previous = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
-  const receipt = await client.getTransactionReceipt({ hash: previous.rejection.transactionHash });
-  if (receipt.status === 'reverted') {
+  const previousTransactionHash = previous.rejection?.transactionHash;
+  const receipt = previousTransactionHash
+    ? await client.getTransactionReceipt({ hash: previousTransactionHash })
+    : undefined;
+  if (receipt?.status === 'reverted') {
     console.log(JSON.stringify({ event: 'revoked_case_already_complete', ...previous.rejection }));
     process.exit(0);
   }
@@ -265,7 +274,7 @@ let encodedMandateId = await client.readContract({
   args: [owner, vault],
 });
 let mandateArming = readRecorded('arm-revoked-case-mandate');
-if (encodedMandateId === 0n) {
+if (encodedMandateId === 0n || process.env.VETO_FORCE_NEW_MANDATE === 'true') {
   const mandateId = await client.readContract({
     address: guard,
     abi: guardArtifact.abi,
@@ -306,6 +315,15 @@ const mandate = await client.readContract({
 if (!mandate[7] || mandate[2] !== shares) throw new Error('ACTIVE_MANDATE_MISMATCH');
 
 let proposalSubmission = readRecorded('queue-revoked-case-fee-proposal');
+if (!proposalSubmission && process.env.VETO_PROPOSAL_EVIDENCE_RUN) {
+  const source = path.join(
+    repositoryRoot,
+    '.local-data',
+    process.env.VETO_PROPOSAL_EVIDENCE_RUN,
+    'queue-real-morpho-fee-proposal.json',
+  );
+  if (fs.existsSync(source)) proposalSubmission = JSON.parse(fs.readFileSync(source, 'utf8'));
+}
 let revocation = readRecorded('revoke-detected-fee-proposal');
 let executableAt = await client.readContract({
   address: vault,
@@ -338,6 +356,7 @@ for (const migration of [
   '0001_exit_intents.sql',
   '0002_proposal_decisions.sql',
   '0003_managed_rules.sql',
+  '0004_keeperhub_conditional.sql',
 ]) {
   await store.applyMigration(
     fs.readFileSync(path.join(repositoryRoot, 'db', 'migrations', migration), 'utf8'),
@@ -378,6 +397,7 @@ if (resumingAfterKeeperHubPreflightRejection) {
       startBlock: BigInt(proposalSubmission.blockNumber),
       confirmationDepth: 0n,
       reorgRewindBlocks: 12n,
+      executionMode,
     },
   });
   if (scan.readyCreated !== 1) throw new Error(`SCANNER_DID_NOT_CREATE_READY:${scan.readyCreated}`);
@@ -404,17 +424,34 @@ if (resumingAfterKeeperHubPreflightRejection) {
     abi: JSON.stringify(vaultAbi),
   });
 
-  const submitted = await keeperHub.submitContractCall(
-    intent.serializedRequest,
-    intent.idempotencyKey,
-  );
-  intent = await store.transition(operationKey, workerId, 'PENDING', {
-    executionId: submitted.executionId,
-    transactionHash: submitted.transactionHash,
-    detail: { keeperHubState: submitted.state, submittedAfterRevocation: true },
-  });
-  directExecution =
-    submitted.state === 'pending' ? await waitForExecution(submitted.executionId) : submitted;
+  if (executionMode === 'conditional') {
+    await store.release(operationKey, workerId);
+    const pipelineResult = await new ExitPipeline(store, keeperHub, async () => {
+      throw new Error('RECONCILIATION_MUST_NOT_RUN_FOR_FALSE_CONDITION');
+    }).runOnce(workerId);
+    if (pipelineResult?.state !== 'BLOCKED') {
+      throw new Error(`CONDITIONAL_DID_NOT_BLOCK:${pipelineResult?.state ?? 'missing'}`);
+    }
+    intent = pipelineResult;
+    directExecution = {
+      executionId: null,
+      state: 'condition-false',
+      transactionHash: null,
+      conditionResult: pipelineResult.reconciliation?.conditionResult,
+    };
+  } else {
+    const submitted = await keeperHub.submitContractCall(
+      intent.serializedRequest,
+      intent.idempotencyKey,
+    );
+    intent = await store.transition(operationKey, workerId, 'PENDING', {
+      executionId: submitted.executionId,
+      transactionHash: submitted.transactionHash,
+      detail: { keeperHubState: submitted.state, submittedAfterRevocation: true },
+    });
+    directExecution =
+      submitted.state === 'pending' ? await waitForExecution(submitted.executionId) : submitted;
+  }
 }
 
 const executableAfterRevoke = await client.readContract({
@@ -482,7 +519,7 @@ if (directExecution.transactionHash) {
     revertName: 'ProposalIsNotExecutable',
   };
 } else {
-  if (directExecution.state !== 'failed') {
+  if (!['failed', 'condition-false'].includes(directExecution.state)) {
     throw new Error(`DIRECT_EXECUTION_NOT_TERMINAL:${directExecution.state}`);
   }
   const recorderInitCode = encodeDeployData({
@@ -550,26 +587,28 @@ if (directExecution.transactionHash) {
   };
 }
 
-intent = await store.transition(operationKey, workerId, 'BLOCKED', {
-  lastError: 'PROPOSAL_REVOKED_BEFORE_EXECUTION',
-  reconciliation: {
-    directKeeperHubExecutionId: directExecution.executionId,
-    directKeeperHubState: directExecution.state,
-    directTransactionHash: directExecution.transactionHash ?? null,
-    publicProofExecutionId: publicProof.executionId,
-    publicProofTransactionHash: publicProof.transactionHash,
-    guardReached: true,
-    revertSelector: publicProof.revertSelector,
-    revertName: 'ProposalIsNotExecutable',
-    expectedStaleRejection: true,
-  },
-  detail: {
-    keeperHubState: directExecution.state,
-    expectedStaleRejection: true,
-    publicProofMode: publicProof.mode,
-  },
-});
-await store.release(operationKey, workerId);
+if (executionMode === 'direct') {
+  intent = await store.transition(operationKey, workerId, 'BLOCKED', {
+    lastError: 'PROPOSAL_REVOKED_BEFORE_EXECUTION',
+    reconciliation: {
+      directKeeperHubExecutionId: directExecution.executionId,
+      directKeeperHubState: directExecution.state,
+      directTransactionHash: directExecution.transactionHash ?? null,
+      publicProofExecutionId: publicProof.executionId,
+      publicProofTransactionHash: publicProof.transactionHash,
+      guardReached: true,
+      revertSelector: publicProof.revertSelector,
+      revertName: 'ProposalIsNotExecutable',
+      expectedStaleRejection: true,
+    },
+    detail: {
+      keeperHubState: directExecution.state,
+      expectedStaleRejection: true,
+      publicProofMode: publicProof.mode,
+    },
+  });
+  await store.release(operationKey, workerId);
+}
 
 const afterRejection = await balances(vaultAbi);
 const mandateAfter = await client.readContract({
@@ -614,6 +653,8 @@ const evidence = {
     simulationPassedBeforeRevoke,
   },
   rejection: {
+    executionMode,
+    conditionResult: directExecution.conditionResult ?? null,
     directKeeperHubExecutionId: directExecution.executionId,
     directKeeperHubState: directExecution.state,
     directTransactionHash: directExecution.transactionHash ?? null,

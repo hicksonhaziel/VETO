@@ -45,13 +45,18 @@ const keeperHubApiKey = process.env.KEEPERHUB_API_KEY;
 const keeperHubBaseUrl = process.env.KEEPERHUB_BASE_URL || 'https://app.keeperhub.com';
 const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org';
 const databaseUrl = process.env.DATABASE_URL;
+const executionMode = process.env.KEEPERHUB_EXECUTION_MODE || 'direct';
+if (!['direct', 'conditional'].includes(executionMode)) {
+  throw new Error('INVALID_KEEPERHUB_EXECUTION_MODE');
+}
 if (!keeperHubApiKey) throw new Error('KEEPERHUB_API_KEY is required');
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, '../../..');
 const artifactDirectory = path.join(repositoryRoot, 'contracts', 'dist');
-const outputDirectory = path.join(repositoryRoot, '.local-data', 'real-morpho-live');
+const evidenceRun = process.env.VETO_EVIDENCE_RUN || 'real-morpho-live';
+const outputDirectory = path.join(repositoryRoot, '.local-data', evidenceRun);
 fs.mkdirSync(outputDirectory, { recursive: true, mode: 0o700 });
 
 const singletonAbi = parseAbi([
@@ -114,7 +119,7 @@ async function setupCall(label, request) {
   const serialized = serializeContractCall(request);
   const execution = await keeperHub.submitContractCall(
     serialized,
-    keeperHubIdempotencyKey(`real-morpho-setup:${chainId}:${label}`),
+    keeperHubIdempotencyKey(`real-morpho-setup:${chainId}:${evidenceRun}:${label}`),
   );
   const terminal = await waitForExecution(execution.executionId);
   if (terminal.state !== 'completed' || !terminal.transactionHash) {
@@ -457,7 +462,8 @@ let mandate =
         args: [mandateId],
       });
 let mandateArming = readRecorded('arm-real-morpho-exit-mandate');
-if (!mandate?.[7]) {
+const mandateCheckBlock = await client.getBlock();
+if (!mandate?.[7] || mandate[5] <= mandateCheckBlock.timestamp) {
   mandateId = nextMandateId;
   const block = await client.getBlock();
   const minimumAssets = await client.readContract({
@@ -526,6 +532,7 @@ for (const migration of [
   '0001_exit_intents.sql',
   '0002_proposal_decisions.sql',
   '0003_managed_rules.sql',
+  '0004_keeperhub_conditional.sql',
 ]) {
   await store.applyMigration(
     fs.readFileSync(path.join(repositoryRoot, 'db', 'migrations', migration), 'utf8'),
@@ -543,6 +550,7 @@ const scan = await scanConfiguredMandate({
     startBlock: BigInt(proposalSubmission.blockNumber),
     confirmationDepth: 0n,
     reorgRewindBlocks: 12n,
+    executionMode,
   },
 });
 console.log(
@@ -646,6 +654,8 @@ const evidence = {
   executionId: stored.executionId,
   transactionHash: stored.transactionHash,
   finalState: stored.state,
+  executionMode: stored.executionMode,
+  conditionalRequest: stored.conditionalRequest,
   balances: {
     ownerAssetsAtStart: ownerAssetsAtStart.toString(),
     ownerAssetsAfterDeposit: ownerAssetsAfterDeposit.toString(),

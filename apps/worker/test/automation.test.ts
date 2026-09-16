@@ -23,6 +23,19 @@ test('parses one explicit supported-chain automation configuration', () => {
   assert.equal(config.confirmationDepth, 2n);
   assert.equal(config.reorgRewindBlocks, 12n);
   assert.equal(config.pollIntervalMs, 15_000);
+  assert.equal(config.executionMode, 'conditional');
+});
+
+test('accepts only explicit KeeperHub execution modes', () => {
+  assert.equal(
+    automationConfigFromEnv({ ...completeEnvironment, KEEPERHUB_EXECUTION_MODE: 'conditional' })
+      .executionMode,
+    'conditional',
+  );
+  assert.throws(
+    () => automationConfigFromEnv({ ...completeEnvironment, KEEPERHUB_EXECUTION_MODE: 'workflow' }),
+    /INVALID_KEEPERHUB_EXECUTION_MODE/,
+  );
 });
 
 test('refuses missing configuration and unsupported chains', () => {

@@ -1,0 +1,16 @@
+{
+  "contractAddress": "0x9019B1e26795E90825c567aD08c945C603e7F9B9",
+  "chainId": 84532,
+  "functionName": "executableAt",
+  "functionArgs": "[\"0xfe56e2320000000000000000000000000000000000000000000000000000000025cd0f7f\"]",
+  "abi": "[{\"type\":\"function\",\"name\":\"executableAt\",\"stateMutability\":\"view\",\"inputs\":[{\"name\":\"data\",\"type\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}]}]",
+  "condition": { "operator": "eq", "value": "1789551002" },
+  "action": {
+    "contractAddress": "0xF23824d2ce4e43fA1073896D1F2E898fE47BBE0F",
+    "chainId": 84532,
+    "functionName": "execute",
+    "functionArgs": "[\"4\",\"0xfe56e2320000000000000000000000000000000000000000000000000000000025cd0f7f\",\"1789551002\"]",
+    "abi": "[{\"type\":\"function\",\"name\":\"execute\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"mandateId\",\"type\":\"uint256\"},{\"name\":\"proposal\",\"type\":\"bytes\"},{\"name\":\"expectedExecutableAt\",\"type\":\"uint256\"}],\"outputs\":[{\"name\":\"assets\",\"type\":\"uint256\"}]}]",
+    "gasLimitMultiplier": "1.3"
+  }
+}

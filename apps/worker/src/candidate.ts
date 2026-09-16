@@ -19,12 +19,14 @@ export const exitGuardExecuteAbi = [
 
 export function buildReadyExitIntent(options: {
   chainId: number;
+  vault: Address;
   guard: Address;
   mandateId: bigint;
   proposalIdentity: string;
   proposalData: Hex;
   expectedExecutableAt: bigint;
   assessment: ManagementFeeAssessment;
+  executionMode?: 'direct' | 'conditional';
 }): ReadyExitIntent {
   if (!options.assessment.eligible || options.assessment.reason !== 'eligible') {
     throw new Error(`PROPOSAL_NOT_ELIGIBLE:${options.assessment.reason}`);
@@ -34,6 +36,18 @@ export function buildReadyExitIntent(options: {
     guard: options.guard,
     mandateId: options.mandateId,
   });
+  const request = {
+    contractAddress: options.guard,
+    chainId: options.chainId,
+    functionName: 'execute',
+    functionArgs: JSON.stringify([
+      options.mandateId.toString(),
+      options.proposalData,
+      options.expectedExecutableAt.toString(),
+    ]),
+    abi: JSON.stringify(exitGuardExecuteAbi),
+    gasLimitMultiplier: '1.3',
+  } as const;
   return {
     operationKey,
     chainId: options.chainId,
@@ -42,18 +56,25 @@ export function buildReadyExitIntent(options: {
     proposalIdentity: options.proposalIdentity,
     proposalData: options.proposalData,
     expectedExecutableAt: options.expectedExecutableAt.toString(),
-    request: {
-      contractAddress: options.guard,
-      chainId: options.chainId,
-      functionName: 'execute',
-      functionArgs: JSON.stringify([
-        options.mandateId.toString(),
-        options.proposalData,
-        options.expectedExecutableAt.toString(),
-      ]),
-      abi: JSON.stringify(exitGuardExecuteAbi),
-      gasLimitMultiplier: '1.3',
-    },
+    request,
     idempotencyKey: keeperHubIdempotencyKey(operationKey),
+    executionMode: options.executionMode ?? 'direct',
+    conditionalRequest: {
+      contractAddress: options.vault,
+      chainId: options.chainId,
+      functionName: 'executableAt',
+      functionArgs: JSON.stringify([options.proposalData]),
+      abi: JSON.stringify([
+        {
+          type: 'function',
+          name: 'executableAt',
+          stateMutability: 'view',
+          inputs: [{ name: 'data', type: 'bytes' }],
+          outputs: [{ name: '', type: 'uint256' }],
+        },
+      ]),
+      condition: { operator: 'eq', value: options.expectedExecutableAt.toString() },
+      action: request,
+    },
   };
 }

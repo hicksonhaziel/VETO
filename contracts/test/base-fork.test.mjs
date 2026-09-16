@@ -186,6 +186,20 @@ test('owner-only redemption succeeds on the pinned Gauntlet Base deployment', as
     args: [0n, proposal, executableAt],
   });
 
+  // Deterministic TOCTOU proof: the precondition is true above, then the proposal changes.
+  // The subsequent guard call must reject without consuming the mandate or moving value.
+  const sharesBeforeRace = await publicClient.readContract({
+    address: vault,
+    abi: vaultAbi,
+    functionName: 'balanceOf',
+    args: [owner],
+  });
+  const assetsBeforeRace = await publicClient.readContract({
+    address: asset,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [owner],
+  });
   const queuedSnapshot = await publicClient.request({ method: 'evm_snapshot' });
   const revokeHash = await curatorClient.writeContract({
     address: vault,
@@ -203,6 +217,31 @@ test('owner-only redemption succeeds on the pinned Gauntlet Base deployment', as
       args: [0n, proposal, executableAt],
     }),
   );
+  const mandateAfterRace = await publicClient.readContract({
+    address: guard,
+    abi: artifact.abi,
+    functionName: 'mandates',
+    args: [0n],
+  });
+  assert.equal(
+    await publicClient.readContract({
+      address: vault,
+      abi: vaultAbi,
+      functionName: 'balanceOf',
+      args: [owner],
+    }),
+    sharesBeforeRace,
+  );
+  assert.equal(
+    await publicClient.readContract({
+      address: asset,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [owner],
+    }),
+    assetsBeforeRace,
+  );
+  assert.equal(mandateAfterRace[7], true);
   assert.equal(
     await publicClient.request({ method: 'evm_revert', params: [queuedSnapshot] }),
     true,

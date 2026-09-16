@@ -78,4 +78,14 @@ export type ReadyExitIntent = {
   expectedExecutableAt: string;
   request: ContractCallRequest;
   idempotencyKey: string;
+  executionMode?: 'direct' | 'conditional';
+  conditionalRequest?: {
+    contractAddress: `0x${string}`;
+    chainId: number;
+    functionName: string;
+    functionArgs: string;
+    abi: string;
+    condition: { operator: 'eq'; value: string };
+    action: ContractCallRequest;
+  };
 };

@@ -4,22 +4,38 @@
 
 VETO is depositor-controlled exit authorization for a queued Morpho Vault V2 management-fee
 increase. The VETO scanner and durable policy decide **which** owner-approved exit is eligible.
-KeeperHub manages the financial attempt: direct `POST /api/execute/contract-call` simulation,
-idempotent submission of the exact serialized guard call, a KeeperHub execution ID, and
-`GET /api/execute/{executionId}/status` recovery. The worker then independently reconciles public
-receipt and contract state. This is more than alert delivery, but the current submitted path is
-**direct execution, not a KeeperHub workflow**.
+KeeperHub manages the financial attempt through `POST /api/execute/check-and-execute`: it reads the
+exact Morpho proposal timestamp, applies an equality condition, and only then executes the persisted
+guard action. VETO persists the serialized read + condition + action and stable idempotency key
+before submission, stores the returned execution identity, recovers with the same body/key, and
+polls `GET /api/execute/{executionId}/status`. Direct contract execution remains a fallback.
 
 ```text
-Morpho Submit/Revoke state → VETO proposal + mandate check → PostgreSQL intent
-  → KeeperHub simulate/preflight → KeeperHub direct guard submission/status
-  → VetoExitGuard.execute → Morpho redeem(shares, owner, owner)
-  → owner assets + worker receipt/event/mandate reconciliation
+Morpho Submit/Revoke → VETO rule → PostgreSQL intent
+  → KeeperHub read executableAt → equality condition
+       false → no financial tx → BLOCKED
+       true  → managed VetoExitGuard.execute → Morpho redeem → owner
+  → receipt/event/state reconciliation → EXITED or DISPUTED
 ```
 
 KeeperHub is not claimed to be technically irreplaceable. The implemented dependency is its
-managed simulation/preflight, execution identity, stable-key financial submission, status/recovery,
-and transaction evidence. The guard remains the final authorization, independent of KeeperHub.
+protocol-state read, conditional pre-broadcast gating, managed signing/execution, execution identity,
+stable-key submission, status/recovery, and transaction evidence. The guard remains the final
+authorization, independent of KeeperHub.
+
+## Three proof cases
+
+The [Day 8 report](../evidence/day-8/keeperhub-conditional-execution.md) contains the current proof:
+
+- **true + true:** KeeperHub execution `35o448zta7uy9dun9j6py`, [public exit tx
+  `0x24bafb…c3d6e`](https://base-sepolia.blockscout.com/tx/0x24bafbb926788884dee9160f4ad723a107b3159e4f5ea03b5b78cf07045c3d6e),
+  funds to owner, mandate consumed, worker `EXITED`;
+- **false before execution:** KeeperHub observed `0` instead of `1789551002`, returned false with
+  no conditional execution ID or financial transaction, balances unchanged, mandate active, worker
+  `BLOCKED`; and
+- **T1 true, T2 false:** the deterministic pinned Base-fork test changes Morpho state after the
+  valid precheck and proves the guard rejects with zero movement and an active mandate. This is
+  explicitly fork evidence, not a public-race claim.
 
 ## Public successful and revoked paths
 
@@ -43,13 +59,13 @@ did not move, the mandate stayed active, and the worker recorded
 
 ## Two checks, two times
 
-KeeperHub preflight or a future workflow read can avoid sending an obviously stale call at time
-`T1`. Morpho state may change before transaction inclusion at `T2`. Only
+KeeperHub's implemented conditional read avoids sending an obviously stale call at time `T1`.
+Morpho state may change before transaction inclusion at `T2`. Only
 `VetoExitGuard.execute` enforces the owner's mandate, exact proposal, fee ceiling, timing window,
 shares, minimum return, expiry, one-time use, and owner receiver **atomically at T2**. KeeperHub
 and the guard are defense in depth, not redundant checks.
 
-## Workflow investigation and current limitation
+## Why check-and-execute, not a visual workflow
 
 KeeperHub's official [workflow API](https://docs.keeperhub.com/api/workflows) documents
 programmatic create/execute, and its [Web3 plugin](https://docs.keeperhub.com/plugins/web3) and
@@ -59,38 +75,38 @@ Condition true/false routing, and write-contract nodes. On 2026-09-15, authentic
 organization on Pro, and `GET /api/workflows` accepted its API key. So the relevant primitives
 **are available**; absence of a public API or entitlement is **not** the blocker.
 
-We also made a separate, non-broadcast [conditional dry-run probe](../evidence/day-7/keeperhub-conditional-probe.json)
-using KeeperHub's documented `POST /api/execute/check-and-execute` endpoint against the revoked
-Morpho `executableAt(bytes)` proposal. KeeperHub observed `0`, compared it to the original
-`1789432530`, returned `executed: false`, and did not send the action. This endpoint is a direct
-single-scalar check, **not a workflow run and not used by the worker's financial path**. It does
-not evaluate all VETO predicates or prove the true branch.
+The workflow primitives exist, but the manual workflow execute documentation still does not clearly
+specify equivalent stable-key recovery for a lost response. KeeperHub's direct
+`check-and-execute` endpoint explicitly documents idempotency and provides the required read,
+condition, action, execution ID, and status semantics. It is therefore the deeper **reliable**
+integration used by VETO. It supports one scalar read, so KeeperHub checks exact proposal liveness;
+the guard still enforces the fee ceiling, timing headroom, mandate, amount, minimum return, receiver,
+and one-time use. No visual workflow execution is claimed.
 
-No read → Condition → write workflow was created or substituted into the worker in this change.
-Before routing funds through one, VETO must verify the exact persisted workflow definition,
-true/false run outputs, transaction/status mapping, and **lost-response/idempotent replay semantics**
-for `POST /api/workflows/{id}/execute`. The documented direct endpoint has explicit stable-key
-replay behavior; the workflow execute docs return a KeeperHub-assigned run ID but do not clearly
-specify equivalent keyed recovery for this route. Replacing the tested direct state machine before
-those semantics and the four required adverse tests are verified would weaken operational safety.
-The next bounded integration is a real workflow check of the exact pending proposal, fee and
-headroom, followed on true only by the same guard call; the guard must still reject a T1-true,
-T2-revoked proposal. Do not claim this future workflow is implemented.
+## Recovery and economic truth
+
+Mode and exact requests are persisted per intent, so configuration changes cannot switch an
+in-flight operation between endpoints. Unique operation/idempotency keys, row leasing, and
+`FOR UPDATE SKIP LOCKED` prevent duplicate workers/events from creating a second intent. An unknown
+submission re-enters `RECONCILING` with the identical body/key; pending and confirming operations
+resume from KeeperHub status or the chain receipt. KeeperHub success never directly means `EXITED`:
+receipt, guard event, proposal hash, mandate owner, shares, minimum assets, and consumption must
+agree, otherwise VETO records `DISPUTED`.
 
 ## Inspect the code and evidence
 
 | Question                                                | File                                                                                                                                                                               |
 | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| KeeperHub direct client, retry, response normalization  | [`packages/keeperhub/src/client.ts`](../packages/keeperhub/src/client.ts)                                                                                                          |
+| KeeperHub conditional/direct client and stable replay   | [`packages/keeperhub/src/client.ts`](../packages/keeperhub/src/client.ts)                                                                                                          |
 | Stable body/key, durable submission and status recovery | [`apps/worker/src/pipeline.ts`](../apps/worker/src/pipeline.ts), [`apps/worker/src/store.ts`](../apps/worker/src/store.ts)                                                         |
 | Morpho lifecycle decoding and live eligibility          | [`packages/morpho-v2/src/scanner.ts`](../packages/morpho-v2/src/scanner.ts), [`packages/morpho-v2/src/adapter.ts`](../packages/morpho-v2/src/adapter.ts)                           |
 | Mandate-aware worker scan                               | [`apps/worker/src/scanner.ts`](../apps/worker/src/scanner.ts)                                                                                                                      |
 | Atomic mandate/proposal policy                          | [`contracts/src/VetoExitGuard.sol`](../contracts/src/VetoExitGuard.sol)                                                                                                            |
 | Receipt/event/share/mandate reconciliation              | [`apps/worker/src/reconcile.ts`](../apps/worker/src/reconcile.ts)                                                                                                                  |
 | Judge-facing evidence UI                                | [`apps/web/src/app/_components/operator-console.tsx`](../apps/web/src/app/_components/operator-console.tsx), [`apps/web/src/data/day-three.ts`](../apps/web/src/data/day-three.ts) |
-| Raw public facts                                        | [`Day 5`](../evidence/day-5/), [`Day 6`](../evidence/day-6/), [`Day 7 probe`](../evidence/day-7/keeperhub-conditional-probe.json)                                                  |
+| Raw public facts                                        | [`Day 8 conditional proof`](../evidence/day-8/), [`Day 5`](../evidence/day-5/), [`Day 6`](../evidence/day-6/)                                                                      |
 
 KeeperHub's [direct execution documentation](https://docs.keeperhub.com/api/direct-execution)
 specifies preflight, stable-key replay, execution statuses, and the separate check-and-execute
-surface. The repo's worker tests exercise the direct path; no workflow success is represented by
-those tests.
+surface. Current limitations: one scalar KeeperHub precondition, one implemented Morpho policy,
+test-only unaudited contracts, and no claim of visual workflow usage or production readiness.

@@ -10,19 +10,19 @@ bounded exit, while `VetoExitGuard` independently rechecks the owner's authoriza
 Morpho condition onchain before any shares can move.
 
 **Judge's one-minute path:** [KeeperHub integration map](docs/KEEPERHUB-INTEGRATION.md) →
-[successful real-Morpho exit](evidence/day-5/real-morpho-v2.md) →
-[revoked-proposal rejection](evidence/day-6/revoked-proposal.md). The current financial path is:
+[conditional execution proof](evidence/day-8/keeperhub-conditional-execution.md). The current
+primary financial path is:
 
 ```text
-Morpho Vault V2 → VETO scanner/policy → durable worker → KeeperHub direct simulation,
-idempotent submission and status → VetoExitGuard atomic check → Morpho redeem → owner
-                                            ↓
-                              worker receipt/state reconciliation
+Morpho → VETO scanner/policy → durable intent → KeeperHub reads executableAt
+  → condition false: STOP / BLOCKED
+  → condition true: KeeperHub executes VetoExitGuard → Morpho redeem → owner
+  → VETO receipt/event/state reconciliation → EXITED or DISPUTED
 ```
 
-KeeperHub workflow read/conditional nodes are available to investigate, but **not wired into the
-implemented worker path**. The separate conditional dry-run described in the integration map sent no
-transaction. Do not confuse it with the demonstrated direct execution.
+The worker uses KeeperHub's documented, idempotent `check-and-execute` API rather than a visual
+workflow because that endpoint provides the stable-key lost-response recovery required for a
+financial operation. The proven direct contract-call route remains an explicit fallback.
 
 “Veto” does not mean cancelling Morpho governance or preventing a curator from changing a vault.
 The depositor is vetoing **their own continued participation** by leaving.
@@ -46,7 +46,7 @@ The first implemented policy is a **management-fee ceiling**:
 queued management fee > owner's ceiling
     -> verify the exact proposal
     -> persist one bounded exit intent
-    -> KeeperHub simulates and submits the guard call
+    -> KeeperHub reads the exact proposal state and conditionally submits the guard call
     -> guard rechecks the mandate and proposal onchain
     -> redeem the approved shares directly to the owner
     -> reconcile the receipt, event, and consumed mandate
@@ -95,9 +95,10 @@ instead of trusting a stale alert or unconstrained relayer.
 ## Why KeeperHub
 
 KeeperHub is VETO's managed financial execution layer, not merely a notification channel. VETO
-builds one explicit `VetoExitGuard.execute` contract call, simulates it, persists the serialized
-broadcast body and a stable financial-operation idempotency key, submits it through KeeperHub, and
-polls the resulting execution identity.
+persists a `check-and-execute` body containing the Morpho read, exact equality condition, and
+`VetoExitGuard.execute` action with a stable financial-operation idempotency key. KeeperHub reads
+the live proposal, blocks false conditions without broadcasting, or executes and exposes a durable
+execution identity and status.
 
 If a response is lost, the worker recovers with the same body and key rather than inventing a new
 financial intent. After KeeperHub reports completion, VETO independently checks the chain receipt,
@@ -117,7 +118,7 @@ Morpho Vault V2 Submit / Revoke / Accept events
              (unique key, lease, recovery)
                          |
                          v
-              KeeperHub simulate + submit
+       KeeperHub read + condition + managed execute
                          |
                          v
                VetoExitGuard.execute
