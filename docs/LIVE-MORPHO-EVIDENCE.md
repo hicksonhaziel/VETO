@@ -98,16 +98,16 @@ pnpm live:morpho
 
 _(Script location: `contracts/scripts/live-morpho-read.mjs`)_
 
-### Live Onchain Truth (Verified at Block 51,448,773)
+### Live Onchain Truth (Verified via `pnpm live:morpho`)
 
-| Field                           | Onchain Value                    | Significance to VETO                                                                                                          |
-| :------------------------------ | :------------------------------- | :---------------------------------------------------------------------------------------------------------------------------- |
-| **`factory.isVaultV2(vault)`**  | `true`                           | Cryptographically proves this vault was deployed by the official canonical Morpho factory.                                    |
-| **Total Assets**                | **$171,837,643.95 USDC**         | Live, massive liquidity actively managed by Morpho V2.                                                                        |
-| **Management Fee**              | `0.0000%`                        | Current active fee is 0 bps.                                                                                                  |
-| **Fee Timelock (`0xfe56e232`)** | **`259,200` seconds (3.0 days)** | Guarantees depositors have a **72-hour window** between proposal submission and execution to trigger an autonomous VETO exit. |
-| **Fee Abdication**              | `false`                          | Curator retains authority to increase fees; VETO protection is actively necessary.                                            |
-| **Withdrawal Gates**            | `address(0)` (None)              | `sendSharesGate` and `sendAssetsGate` are unset; exits cannot be blocked or censored by external gate contracts.              |
+| Field                           | Onchain Value                    | Significance to VETO                                                                                                                                                                                                                                                                                                                |
+| :------------------------------ | :------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`factory.isVaultV2(vault)`**  | `true`                           | The referenced Base Morpho Vault V2 factory returns `isVaultV2(vault) == true`.                                                                                                                                                                                                                                                     |
+| **Total Assets / TVL**          | **$171,843,621.78 USDC**         | Total assets actively accounted for in Morpho V2. _(Note: Total assets is not synonymous with immediately available idle redemption liquidity; redemptions depend on market liquidity)._                                                                                                                                            |
+| **Management Fee**              | `0.0000%`                        | Current active fee is 0 bps.                                                                                                                                                                                                                                                                                                        |
+| **Fee Timelock (`0xfe56e232`)** | **`259,200` seconds (3.0 days)** | A newly submitted `setManagementFee` action is scheduled 259,200 seconds (3 days) after submission, providing a protocol reaction window before that change becomes executable. Successful exit still depends on the depositor's mandate and available redemption liquidity.                                                        |
+| **Fee Abdication**              | `false`                          | `setManagementFee` is not abdicated, so the curator retains authority to submit future management-fee changes.                                                                                                                                                                                                                      |
+| **Withdrawal Gate Assessment**  | `address(0)` (Ungated)           | Morpho Vault V2 `redeem`/`withdraw` checks `canSendShares` (`sendSharesGate`) and `canReceiveAssets` (`receiveAssetsGate`). Both are unset (`address(0)`), confirming no gate contracts restrict redemptions. An unset gate removes that specific gate restriction; it does not by itself guarantee available redemption liquidity. |
 
 ---
 
@@ -124,7 +124,7 @@ VETO guarantees exact compatibility with canonical Morpho Vault V2 smart contrac
 
 2. **Vault Runtime Verification:**
    - The deployed bytecode of Gauntlet USDC Prime matches the canonical Morpho `VaultV2.sol` template when constructor-bound immutable offsets (`asset`, `factory`) are normalized.
-   - All source files are pinned with sha256 checksums in [`contracts/scripts/compile-official-morpho-v2.mjs`](file:///home/hickson/VETO/contracts/scripts/compile-official-morpho-v2.mjs).
+   - All source files are pinned with sha256 checksums in [`contracts/scripts/compile-official-morpho-v2.mjs`](../contracts/scripts/compile-official-morpho-v2.mjs).
 
 ---
 
@@ -153,7 +153,7 @@ To prove that VETO works against real depositors and live market liquidity, VETO
 
 ### Pinned Fork Compatibility Results
 
-Automated execution in [`contracts/test/base-fork.test.mjs`](file:///home/hickson/VETO/contracts/test/base-fork.test.mjs):
+Automated execution in [`contracts/test/base-fork.test.mjs`](../contracts/test/base-fork.test.mjs):
 
 ```
 Block:              51,221,130
@@ -188,7 +188,8 @@ While the pinned fork proves compatibility with live mainnet positions, the Base
 - **Public Evidence:**
   - Public Vault (unmodified Morpho V2 bytecode): [`0x9019B1e26795E90825c567aD08c945C603e7F9B9`](https://base-sepolia.blockscout.com/address/0x9019B1e26795E90825c567aD08c945C603e7F9B9)
   - Successful Exit Tx: [`0x24bafbb926788884dee9160f4ad723a107b3159e4f5ea03b5b78cf07045c3d6e`](https://base-sepolia.blockscout.com/tx/0x24bafbb926788884dee9160f4ad723a107b3159e4f5ea03b5b78cf07045c3d6e)
-  - Public Conditional Block Tx (Proposal Revoked): [`0x60e539ddf306f6803ec9dd6b76c8745e7f77dc20661d2359a73df5f6967f15e5`](https://base-sepolia.blockscout.com/tx/0x60e539ddf306f6803ec9dd6b76c8745e7f77dc20661d2359a73df5f6967f15e5)
+  - Curator Revocation Tx: [`0x60e539ddf306f6803ec9dd6b76c8745e7f77dc20661d2359a73df5f6967f15e5`](https://base-sepolia.blockscout.com/tx/0x60e539ddf306f6803ec9dd6b76c8745e7f77dc20661d2359a73df5f6967f15e5)
+  - KeeperHub Conditional False Outcome: `executed: false`; zero financial transaction broadcast (read `executableAt = 0`, evaluated `0 == 1789551002` -> `false`). Mandate active, position untouched.
 
 ---
 

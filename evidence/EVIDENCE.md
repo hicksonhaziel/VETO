@@ -110,10 +110,11 @@ Proves compatibility with the actual production Gauntlet USDC Prime vault deploy
 | :--- | :--- |
 | **Target Vault** | Gauntlet USDC Prime ([`0x050cE30b927Da55177A4914EC73480238BAD56f0`](https://basescan.org/address/0x050cE30b927Da55177A4914EC73480238BAD56f0)) |
 | **Factory Address** | [`0x4501125508079A99ebBebCE205DeC9593C2b5857`](https://basescan.org/address/0x4501125508079A99ebBebCE205DeC9593C2b5857) |
-| **Factory Recognition** | `factory.isVaultV2(0x050c...56f0) == true` |
-| **Live Total Liquidity** | **>$171,000,000.00 USDC** |
-| **Management Fee Timelock** | **259,200 seconds (3.0 days)** via `timelock(0xfe56e232)` |
-| **Withdrawal Restrictions** | None (`sendSharesGate = 0x0`, `sendAssetsGate = 0x0`) |
+| **Factory Recognition** | The referenced Base Morpho Vault V2 factory returns `isVaultV2(vault) == true` |
+| **Total Assets / TVL** | **$171,843,621.78 USDC** *(Note: Total assets in vault; redemptions depend on market liquidity)* |
+| **Management Fee Timelock** | **259,200 seconds (3.0 days)** scheduled reaction window before fee change becomes executable |
+| **Redemption Gate Assessment** | Ungated for redemption (`sendSharesGate = 0x0`, `receiveAssetsGate = 0x0`) |
+| **Recent Submissions Window** | Checked recent 2,000 blocks: zero `setManagementFee` submit events emitted in window |
 | **Live Read Evidence** | [`evidence/live-morpho/live-read-gauntlet-usdc-prime.json`](live-morpho/live-read-gauntlet-usdc-prime.json) |
 | **Live Read Command** | `pnpm live:morpho` |
 | **Pinned Fork Test** | Pinned Base Block `51,221,130` (`contracts/test/base-fork.test.mjs`) |
@@ -145,9 +146,9 @@ Run full monorepo tests with disposable PostgreSQL:
 ```bash
 TEST_DATABASE_URL=postgresql://user:password@127.0.0.1:5432/veto_test pnpm test
 ```
-- **Contracts (`base-fork.test.mjs`, `guard-authority.test.mjs`):** 2 passed, 0 failed
+- **Contracts (`base-fork`, `guard-authority`, `live-evidence-hygiene`):** 3 passed, 0 failed
 - **Morpho Adapter & Scanner (`@veto/morpho-v2`):** 7 passed, 0 failed
 - **Core State Machine (`@veto/core`):** 3 passed, 0 failed
 - **KeeperHub Integration (`@veto/keeperhub`):** 5 passed, 0 failed
 - **Worker Pipeline & Anti-Churn (`@veto/worker`):** 35 passed, 0 failed
-- **Total:** **52 passing tests, 0 failures**
+- **Total:** **53 passing tests, 0 failures**

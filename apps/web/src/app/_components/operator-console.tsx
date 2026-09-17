@@ -617,12 +617,12 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
           </ExternalLink>
         </article>
         <article className="surface evidence-facts">
-          <span className="panel-label">Exit receipt</span>
-          <h2>Reconciled outcome</h2>
+          <span className="panel-label">Exit receipt (Day 8 conditional)</span>
+          <h2>KeeperHub conditional execution</h2>
           <dl>
             <div>
               <dt>Status</dt>
-              <dd>Success</dd>
+              <dd>Success ({evidence.result.state})</dd>
             </div>
             <div>
               <dt>KeeperHub ID</dt>
@@ -633,16 +633,18 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
               <dd>{evidence.result.blockNumber}</dd>
             </div>
             <div>
-              <dt>Gas</dt>
-              <dd>{evidence.result.gasUsed}</dd>
+              <dt>Returned assets</dt>
+              <dd>
+                {evidence.result.assetsReturned} {evidence.position.assetName}
+              </dd>
             </div>
             <div>
-              <dt>Included</dt>
-              <dd>{evidence.result.includedAt} UTC</dd>
+              <dt>Mandate consumed</dt>
+              <dd>Yes (single-use enforced)</dd>
             </div>
             <div>
-              <dt>Duplicate claim</dt>
-              <dd>{evidence.result.duplicateClaimed ? 'Yes' : 'No'}</dd>
+              <dt>Historical direct proof</dt>
+              <dd>{evidence.result.historicalDirectExecutionId}</dd>
             </div>
           </dl>
           <ExternalLink href={explorerTransaction(evidence.result.transactionHash)}>
@@ -650,20 +652,20 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
           </ExternalLink>
         </article>
         <article className="surface evidence-facts">
-          <span className="panel-label">Stale instruction rejected</span>
-          <h2>Revocation held at execution</h2>
+          <span className="panel-label">Conditional false (Day 8 safe block)</span>
+          <h2>Revocation held without broadcast</h2>
           <p>
-            The 2% proposal passed detection and simulation, then was revoked. The guard re-read
-            Morpho state and refused the unchanged prepared call.
+            The 2% proposal was revoked onchain by the curator. KeeperHub read executableAt = 0,
+            evaluated condition false, and safely withheld execution with zero financial broadcast.
           </p>
           <dl>
             <div>
-              <dt>Guard result</dt>
-              <dd>{evidence.revokedProposal.revertName}</dd>
+              <dt>KeeperHub action</dt>
+              <dd>Execution withheld (executed: false)</dd>
             </div>
             <div>
-              <dt>KeeperHub ID</dt>
-              <dd>{evidence.revokedProposal.executionId}</dd>
+              <dt>Financial broadcast</dt>
+              <dd>None (0 financial transactions)</dd>
             </div>
             <div>
               <dt>Owner shares</dt>
@@ -678,12 +680,12 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
               <dd>{evidence.revokedProposal.mandateStillActive ? 'Still active' : 'Consumed'}</dd>
             </div>
             <div>
-              <dt>Worker</dt>
+              <dt>Worker state</dt>
               <dd>{evidence.revokedProposal.workerState}</dd>
             </div>
           </dl>
-          <ExternalLink href={explorerTransaction(evidence.revokedProposal.transactionHash)}>
-            Open rejection proof
+          <ExternalLink href={explorerTransaction(evidence.revokedProposal.curatorRevocationTx)}>
+            Open curator revocation tx
           </ExternalLink>
         </article>
       </section>

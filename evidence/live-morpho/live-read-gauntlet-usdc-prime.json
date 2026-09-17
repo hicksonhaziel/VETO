@@ -1,11 +1,11 @@
 {
-  "checkedAt": "2026-09-17T23:19:32.262Z",
+  "checkedAt": "2026-09-17T23:44:26.346Z",
   "network": {
     "name": "Base Mainnet",
     "chainId": 8453,
-    "rpcEndpoint": "https://mainnet.base.org",
-    "blockNumber": "51448911",
-    "blockTimestamp": "1789687169"
+    "rpcSource": "public-default",
+    "blockNumber": "51449658",
+    "blockTimestamp": "1789688663"
   },
   "vault": {
     "address": "0x050cE30b927Da55177A4914EC73480238BAD56f0",
@@ -39,31 +39,40 @@
       "setManagementFeeSelector": "0xfe56e232",
       "managementFeeTimelockSeconds": "259200",
       "managementFeeTimelockDays": "3.0",
-      "setManagementFeeAbdicated": false
+      "timelockReactionWindowNote": "A newly submitted setManagementFee action is scheduled 259,200 seconds (3 days) after submission, providing a protocol reaction window before that change becomes executable. Successful exit still depends on the depositor's mandate and available redemption liquidity.",
+      "setManagementFeeAbdicated": false,
+      "authorityNote": "setManagementFee is not abdicated, so the curator retains authority to submit future management-fee changes."
     },
-    "gates": {
+    "redemptionGateAssessment": {
+      "sendSharesGate": "0x0000000000000000000000000000000000000000",
       "receiveAssetsGate": "0x0000000000000000000000000000000000000000",
+      "currentlyUngatedForOwnerRedemption": true,
       "receiveSharesGate": "0x0000000000000000000000000000000000000000",
       "sendAssetsGate": "0x0000000000000000000000000000000000000000",
-      "sendSharesGate": "0x0000000000000000000000000000000000000000",
-      "exitRestricted": false,
-      "exitabilityAssessment": "UNRESTRICTED: No gate contracts intercept or block share redemptions or asset withdrawals"
+      "note": "Morpho Vault V2 redeem/withdraw checks canSendShares on behalf of owner and canReceiveAssets for the receiver. An unset gate (address(0)) removes that gate restriction; it does not by itself guarantee sufficient redemption liquidity."
     },
     "financialState": {
-      "totalAssetsRaw": "171837808590239",
-      "totalAssetsFormatted": "$171,837,808.59 USDC",
-      "totalSupplyRaw": "164953385894018001542467662",
-      "totalSupplyFormatted": "164,953,385.8940",
-      "liquidityAdapter": "0x2fEcd40f436CA170D2478a58Da898FcE93988eef"
+      "totalAssetsOrTvlRaw": "171846255639421",
+      "totalAssetsOrTvlFormatted": "$171,846,255.64 USDC",
+      "totalSupplyRaw": "164961157906309754958698700",
+      "totalSupplyFormatted": "164,961,157.9063",
+      "liquidityAdapter": "0x2fEcd40f436CA170D2478a58Da898FcE93988eef",
+      "liquidityDistinctionNote": "totalAssets represents the vault's total assets / TVL across all market allocations, not immediately available idle redemption liquidity. Successful redemption depends on available market liquidity and adapter deallocation."
     },
-    "pendingFeeProposal": {
-      "detected": false,
-      "scannedBlockRange": "51446911 - 51448911",
-      "status": "no_pending_management_fee_proposal_in_scanned_range"
+    "recentManagementFeeSubmissions": {
+      "scannedFromBlock": "51447658",
+      "scannedToBlock": "51449658",
+      "scannedBlockCount": "2000",
+      "observedSubmitEventsCount": 0,
+      "status": "no_setManagementFee_submit_event_detected_in_scanned_block_range",
+      "events": [],
+      "note": "Morpho Vault V2 proposals remain pending from Submit until accept or revoke. A recent-block scan observes recent emissions within the window; establishing whether an older proposal remains unaccepted/unrevoked requires full historical archive indexing."
     }
   },
   "provenance": {
     "canonicalMorphoFactory": "0x4501125508079A99ebBebCE205DeC9593C2b5857",
+    "factoryRecognition": true,
+    "factoryVerificationStatement": "The referenced Base Morpho Vault V2 factory returns isVaultV2(vault) == true.",
     "factoryRuntimeSha256": "cf0f79d0fb41a563e915b81cefb581f74acb46336cee022c1991671d9e575d8e",
     "morphoVaultV2Commit": "6f2af6602e05d9e123a87c1067712a4566608044",
     "solidityCompiler": "0.8.28 (viaIR, 100000 runs, cancun)"

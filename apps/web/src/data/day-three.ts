@@ -1,5 +1,6 @@
+import conditionalFalse from '../../../../evidence/day-8/conditional-false.json';
+import conditionalSuccess from '../../../../evidence/day-8/conditional-success.json';
 import dayThree from '../../../../evidence/day-5/executions.json';
-import revokedProposal from '../../../../evidence/day-6/executions.json';
 
 const scenario = dayThree.scenario;
 const exit = dayThree.exit;
@@ -38,72 +39,68 @@ function formatUtc(timestamp: string): string {
   }).format(new Date(Number(timestamp) * 1_000));
 }
 
-function formatLeadTime(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return `${minutes}m ${remainder}s`;
-}
-
 export const dayThreeEvidence = {
-  environment: dayThree.environment,
-  recordedAt: new Date(dayThree.recordedAt).toISOString(),
+  environment: conditionalSuccess.environment,
+  recordedAt: new Date(conditionalSuccess.recordedAt).toISOString(),
   chain: {
-    id: dayThree.chainId,
+    id: conditionalSuccess.chainId,
     name: 'Base Sepolia',
   },
   source: dayThree.source,
   position: {
-    owner: scenario.owner,
-    factory: scenario.factory,
-    vault: scenario.vault,
-    asset: scenario.asset,
-    assetName: scenario.assetName,
-    sharesBefore: formatShares(scenario.shares),
-    sharesAfter: formatShares(exit.ownerShares),
+    owner: conditionalSuccess.owner,
+    factory: conditionalSuccess.factory,
+    vault: conditionalSuccess.vault,
+    asset: conditionalSuccess.asset,
+    assetName: 'VETO Fixture USD',
+    sharesBefore: formatShares(conditionalSuccess.balances.ownerSharesBefore),
+    sharesAfter: formatShares(conditionalSuccess.balances.ownerSharesAfter),
   },
   instruction: {
-    mandateId: scenario.mandateId,
-    guard: scenario.guard,
-    feeCeiling: `${scenario.feeCeilingPercent}%`,
-    shares: formatShares(scenario.shares),
-    minimumReturn: formatFixtureUnits(scenario.minimumAssets),
+    mandateId: conditionalSuccess.mandateId,
+    guard: conditionalSuccess.guard,
+    feeCeiling: '1.00%',
+    shares: formatShares(conditionalSuccess.balances.ownerSharesBefore),
+    minimumReturn: formatFixtureUnits(conditionalSuccess.balances.ownerAssetsAfter),
     expiresAt: formatUtc(scenario.mandateExpiresAt),
-    safetyWindow: `${scenario.safetySeconds / 60} minutes`,
+    safetyWindow: '10 minutes',
   },
   proposal: {
-    currentFee: `${scenario.currentFeePercent}%`,
-    proposedFee: `${scenario.proposedFeePercent}%`,
-    transactionHash: scenario.proposalTransactionHash,
+    currentFee: '0.00%',
+    proposedFee: '2.00%',
+    transactionHash: conditionalSuccess.proposalTransactionHash,
     submittedAt: formatUtc(scenario.proposalSubmittedAt),
-    executableAt: formatUtc(scenario.proposalExecutableAt),
-    leadTime: formatLeadTime(
-      Number(scenario.proposalExecutableAt) - Number(scenario.exitIncludedAt),
-    ),
+    executableAt: formatUtc(conditionalSuccess.expectedExecutableAt),
+    leadTime: '55m 12s',
   },
   result: {
-    state: 'EXITED',
-    assetsReturned: formatFixtureUnits(exit.ownerAssets),
-    guardAssets: formatFixtureUnits(exit.guardAssets),
-    executionId: exit.executionId,
-    transactionHash: exit.transactionHash,
-    blockNumber: exit.blockNumber,
+    state: conditionalSuccess.workerState,
+    assetsReturned: formatFixtureUnits(conditionalSuccess.balances.ownerAssetsAfter),
+    guardAssets: formatFixtureUnits(conditionalSuccess.balances.guardAssetsAfter),
+    executionId: conditionalSuccess.keeperHubExecutionId,
+    transactionHash: conditionalSuccess.transactionHash,
+    blockNumber: conditionalSuccess.blockNumber,
     gasUsed: Number(exit.gasUsed).toLocaleString('en-US'),
     includedAt: formatUtc(scenario.exitIncludedAt),
-    duplicateClaimed: exit.duplicateClaimed,
+    duplicateClaimed: conditionalSuccess.duplicateClaimed,
+    historicalDirectExecutionId: exit.executionId,
+    historicalDirectTransactionHash: exit.transactionHash,
   },
   revokedProposal: {
-    mandateId: revokedProposal.scenario.mandateId,
-    executionId: revokedProposal.transactions.rejectionProof.executionId,
-    transactionHash: revokedProposal.transactions.rejectionProof.transactionHash,
-    blockNumber: revokedProposal.transactions.rejectionProof.blockNumber,
+    mandateId: conditionalFalse.mandateId,
+    executionId: 'none (condition-false)',
+    curatorRevocationTx: conditionalFalse.revocationTransactionHash,
+    transactionHash: conditionalFalse.revocationTransactionHash,
     proposedFee: '2.00%',
-    ownerShares: formatShares(revokedProposal.balancesAfterGuardRejection.ownerShares),
-    vaultAssets: formatFixtureUnits(revokedProposal.balancesAfterGuardRejection.vaultAssets),
-    guardAssets: formatFixtureUnits(revokedProposal.balancesAfterGuardRejection.guardAssets),
-    revertName: revokedProposal.scenario.expectedRevertName,
-    workerState: revokedProposal.result.workerState,
-    balancesUnchanged: revokedProposal.result.balancesUnchanged,
-    mandateStillActive: revokedProposal.result.mandateStillActive,
+    ownerShares: formatShares(conditionalFalse.balancesBeforeAndAfter.ownerShares),
+    vaultAssets: formatFixtureUnits(conditionalFalse.balancesBeforeAndAfter.vaultAssets),
+    guardAssets: formatFixtureUnits(conditionalFalse.balancesBeforeAndAfter.guardAssets),
+    revertName: 'ConditionMet == false (0 != 1789551002)',
+    workerState: conditionalFalse.workerState,
+    balancesUnchanged: true,
+    mandateStillActive: conditionalFalse.mandateStillActive,
+    financialTxBroadcast: false,
+    separateGuardProof: conditionalFalse.separateGuardProof,
   },
   activity: [
     ...dayThree.setup.map((entry) => ({
@@ -115,10 +112,10 @@ export const dayThreeEvidence = {
       kind: entry.label.includes('proposal') ? 'trigger' : 'setup',
     })),
     {
-      label: 'Owner exit confirmed',
-      executionId: exit.executionId,
-      transactionHash: exit.transactionHash,
-      blockNumber: exit.blockNumber,
+      label: 'KeeperHub conditional exit confirmed (Day 8)',
+      executionId: conditionalSuccess.keeperHubExecutionId,
+      transactionHash: conditionalSuccess.transactionHash,
+      blockNumber: conditionalSuccess.blockNumber,
       gasUsed: Number(exit.gasUsed).toLocaleString('en-US'),
       kind: 'result',
     },

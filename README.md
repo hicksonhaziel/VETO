@@ -143,57 +143,66 @@ claim a completed Glacient integration.
 
 ## Current evidence
 
-The strongest proof now joins real Morpho contract behavior and public KeeperHub execution in one
+The strongest proof now joins real Morpho contract behavior and public KeeperHub conditional execution in one
 end-to-end Base Sepolia run.
 
-### Public real-Morpho end to end
+### Primary proof: Day 8 KeeperHub conditional path
 
-VETO deployed Morpho's unmodified Vault V2 `2025-09-15` factory source on Base Sepolia. The compiled
-factory runtime hash exactly matches Morpho's canonical Base factory. That factory created the vault
-used for the public deposit, management-fee proposal, scan, guarded redemption, and reconciliation.
-The asset is deliberately valueless test data; this proves real Morpho Vault V2 semantics without
-risking mainnet funds.
+VETO deploys Morpho's unmodified Vault V2 `2025-09-15` factory source on Base Sepolia. The compiled
+factory runtime hash exactly matches Morpho's canonical Base factory. The primary execution uses
+KeeperHub's official `check-and-execute` conditional endpoint:
 
-| Field                     | Recorded result                                                                                                                 |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Network                   | Base Sepolia (`84532`)                                                                                                          |
-| Morpho Vault V2           | `0x9019B1e26795E90825c567aD08c945C603e7F9B9`                                                                                    |
-| KeeperHub execution       | `e6gg1z9q6eb37cd2v6v1w`                                                                                                         |
-| Transaction               | [`0x6823882c…ce333`](https://base-sepolia.blockscout.com/tx/0x6823882c7605922935c902c53efad5ff7c4827e3461d05fe8313116b962ce333) |
-| Receipt                   | Success, block `46807762`                                                                                                       |
-| Owner return              | `10.000000` VETO Fixture USD units                                                                                              |
-| Owner shares after        | `0`                                                                                                                             |
-| Guard asset balance after | `0`                                                                                                                             |
-| Worker state              | `EXITED`                                                                                                                        |
-| Duplicate intent claimed  | No                                                                                                                              |
+```text
+Morpho proposal
+  ↓
+VETO scanner + owner policy
+  ↓
+durable PostgreSQL financial intent
+  ↓
+KeeperHub reads Morpho executableAt
+  ↓
+KeeperHub evaluates condition == true
+  ↓
+KeeperHub executes VetoExitGuard
+  ↓
+Morpho redeem to owner (zero custody)
+  ↓
+VETO receipt/event/state reconciliation → EXITED
+```
 
-The factory is a VETO-controlled public-testnet deployment of canonical Morpho code, not a Morpho
-Association testnet deployment. This does not prove a Morpho mainnet or real-USDC exit. The pinned
-Base fork remains the adverse-test layer against the deployed Gauntlet USDC Prime vault, covering
-revocation, missing allowance, excessive minimum return, and replay rejection.
+| Field                     | Recorded result                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Network                   | Base Sepolia (`84532`)                                                                                                        |
+| Execution mode            | KeeperHub conditional (`POST /api/execute/check-and-execute`)                                                                 |
+| Morpho Vault V2           | `0x9019B1e26795E90825c567aD08c945C603e7F9B9`                                                                                  |
+| KeeperHub execution ID    | `35o448zta7uy9dun9j6py`                                                                                                       |
+| Transaction               | [`0x24bafb…c3d6e`](https://base-sepolia.blockscout.com/tx/0x24bafbb926788884dee9160f4ad723a107b3159e4f5ea03b5b78cf07045c3d6e) |
+| Receipt                   | Success, block `46889242`                                                                                                     |
+| Owner return              | `10.000000` VETO Fixture USD units                                                                                            |
+| Owner shares after        | `0`                                                                                                                           |
+| Guard asset balance after | `0`                                                                                                                           |
+| Mandate state             | Consumed (single-use enforced)                                                                                                |
+| Worker state              | `EXITED`                                                                                                                      |
+| Duplicate intent claimed  | No                                                                                                                            |
+| Raw evidence              | [`evidence/day-8/conditional-success.json`](evidence/day-8/conditional-success.json)                                          |
 
-### Public stale-proposal rejection
+_(Historical direct-call path proof from Day 5 remains recorded in [`evidence/day-5/real-morpho-v2.md`](evidence/day-5/real-morpho-v2.md) with execution ID `e6gg1z9q6eb37cd2v6v1w` and tx `0x6823882c…ce333`)._
 
-The companion run proves the execution-time safety boundary on the same Morpho Vault V2. VETO
-detected and simulated a 2% fee proposal, the curator revoked it, and the guard then returned the
-exact `ProposalIsNotExecutable()` selector. Owner shares and every asset balance remained unchanged,
-the mandate remained active, and the worker recorded `BLOCKED` with
-`PROPOSAL_REVOKED_BEFORE_EXECUTION`.
+### Conditional-false safety: Zero broadcast on proposal revocation
 
-KeeperHub safely refused to broadcast the direct stale call after its own preflight failed. To make
-the guard decision public, a testnet-only zero-custody recorder forwarded the exact prepared calldata
-and emitted the checked rejection. See the
-[`public rejection transaction`](https://base-sepolia.blockscout.com/tx/0x5456da6a430874eece4ad7ec6dc8752bd8c6b56ba274c5842425be73a4d226f0)
-and [`Day 6 evidence`](evidence/day-6/revoked-proposal.md). The outer recorder receipt succeeds only
-because it catches the expected inner guard revert; it is not a successful exit.
+The companion Day 8 run proves that when a queued proposal is revoked before execution, no financial transaction is broadcast:
+
+1. **Curator Revocation:** The curator revoked the pending fee proposal in transaction [`0x60e539dd…f15e5`](https://base-sepolia.blockscout.com/tx/0x60e539ddf306f6803ec9dd6b76c8745e7f77dc20661d2359a73df5f6967f15e5).
+2. **KeeperHub Precheck Evaluation:** KeeperHub read `executableAt = 0`, evaluated `0 == 1789551002` (`false`), and returned `executed: false` with **no execution ID and no transaction hash**.
+3. **Outcome:** **Zero financial transactions were broadcast.** Owner shares (`10.000000`), owner assets, and vault assets remained completely untouched. The mandate remains active for future proposals, and the worker settled to `BLOCKED / PROPOSAL_NOT_PENDING_AT_EXECUTION`. See [`evidence/day-8/conditional-false.json`](evidence/day-8/conditional-false.json).
 
 Further evidence covers PostgreSQL restart recovery, duplicate delivery, worker leasing,
 independent per-mandate scanner checkpoints, proposal/receipt reconciliation, the responsive web
 application, and the unsuccessful Glacient entitlement check. Follow the chronological
 [`Day 1`](docs/DAY-1-GATES.md), [`Day 2`](docs/DAY-2-GATES.md),
 [`Day 3`](docs/DAY-3-GATES.md), and [`Day 4`](docs/DAY-4-GATES.md) records, then read the
-[`real Morpho public proof`](evidence/day-5/real-morpho-v2.md) and
-[`public revoked-proposal proof`](evidence/day-6/revoked-proposal.md), followed by the
+[`Day 8 conditional execution`](evidence/day-8/keeperhub-conditional-execution.md) and
+[`canonical evidence index`](evidence/EVIDENCE.md), followed by the
 [`current functional layer`](docs/FUNCTIONAL-LAYER.md).
 
 ## What the web app does

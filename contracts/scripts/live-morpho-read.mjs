@@ -141,14 +141,14 @@ export async function readLiveMorphoVault() {
 
   const block = await client.getBlock({ blockNumber });
 
-  // Scan recent blocks for pending management fee proposals
-  let pendingProposal = null;
+  // Scan recent blocks for setManagementFee Submit events
+  let recentManagementFeeSubmissions = null;
+  const scanWindow = 2_000n;
+  const fromBlock = blockNumber > scanWindow ? blockNumber - scanWindow : 0n;
   try {
     const submitEvent = parseAbiItem(
       'event Submit(bytes4 indexed selector, bytes data, uint256 executableAt)',
     );
-    const scanWindow = 2_000n;
-    const fromBlock = blockNumber > scanWindow ? blockNumber - scanWindow : 0n;
     const logs = await client.getLogs({
       address: VAULT_ADDRESS,
       event: submitEvent,
@@ -156,28 +156,29 @@ export async function readLiveMorphoVault() {
       fromBlock,
       toBlock: blockNumber,
     });
-    if (logs.length > 0) {
-      pendingProposal = {
-        detected: true,
-        count: logs.length,
-        logs: logs.map((l) => ({
-          transactionHash: l.transactionHash,
-          blockNumber: l.blockNumber?.toString(),
-          data: l.args.data,
-          executableAt: l.args.executableAt?.toString(),
-        })),
-      };
-    } else {
-      pendingProposal = {
-        detected: false,
-        scannedBlockRange: `${fromBlock} - ${blockNumber}`,
-        status: 'no_pending_management_fee_proposal_in_scanned_range',
-      };
-    }
+    recentManagementFeeSubmissions = {
+      scannedFromBlock: fromBlock.toString(),
+      scannedToBlock: blockNumber.toString(),
+      scannedBlockCount: (blockNumber - fromBlock).toString(),
+      observedSubmitEventsCount: logs.length,
+      status:
+        logs.length > 0
+          ? 'submit_events_detected'
+          : 'no_setManagementFee_submit_event_detected_in_scanned_block_range',
+      events: logs.map((l) => ({
+        transactionHash: l.transactionHash,
+        blockNumber: l.blockNumber?.toString(),
+        data: l.args.data,
+        executableAt: l.args.executableAt?.toString(),
+      })),
+      note: 'Morpho Vault V2 proposals remain pending from Submit until accept or revoke. A recent-block scan observes recent emissions within the window; establishing whether an older proposal remains unaccepted/unrevoked requires full historical archive indexing.',
+    };
   } catch (err) {
-    pendingProposal = {
-      detected: false,
-      status: 'scan_skipped_or_restricted',
+    recentManagementFeeSubmissions = {
+      scannedFromBlock: fromBlock.toString(),
+      scannedToBlock: blockNumber.toString(),
+      scannedBlockCount: (blockNumber - fromBlock).toString(),
+      status: 'scan_restricted_or_rpc_limited',
       reason: err instanceof Error ? err.message : String(err),
     };
   }
@@ -187,7 +188,7 @@ export async function readLiveMorphoVault() {
     network: {
       name: 'Base Mainnet',
       chainId: base.id,
-      rpcEndpoint: rpcUrl,
+      rpcSource: process.env.BASE_RPC_URL ? 'custom-configured' : 'public-default',
       blockNumber: blockNumber.toString(),
       blockTimestamp: block.timestamp.toString(),
     },
@@ -227,36 +228,42 @@ export async function readLiveMorphoVault() {
         setManagementFeeSelector: setFeeSelector,
         managementFeeTimelockSeconds: feeTimelock.toString(),
         managementFeeTimelockDays: (Number(feeTimelock) / 86_400).toFixed(1),
+        timelockReactionWindowNote:
+          "A newly submitted setManagementFee action is scheduled 259,200 seconds (3 days) after submission, providing a protocol reaction window before that change becomes executable. Successful exit still depends on the depositor's mandate and available redemption liquidity.",
         setManagementFeeAbdicated: isAbdicated,
+        authorityNote: isAbdicated
+          ? 'setManagementFee is abdicated; fee cannot be changed.'
+          : 'setManagementFee is not abdicated, so the curator retains authority to submit future management-fee changes.',
       },
-      gates: {
+      redemptionGateAssessment: {
+        sendSharesGate,
         receiveAssetsGate,
+        currentlyUngatedForOwnerRedemption:
+          sendSharesGate === '0x0000000000000000000000000000000000000000' &&
+          receiveAssetsGate === '0x0000000000000000000000000000000000000000',
         receiveSharesGate,
         sendAssetsGate,
-        sendSharesGate,
-        exitRestricted:
-          sendAssetsGate !== '0x0000000000000000000000000000000000000000' ||
-          sendSharesGate !== '0x0000000000000000000000000000000000000000',
-        exitabilityAssessment:
-          sendAssetsGate === '0x0000000000000000000000000000000000000000' &&
-          sendSharesGate === '0x0000000000000000000000000000000000000000'
-            ? 'UNRESTRICTED: No gate contracts intercept or block share redemptions or asset withdrawals'
-            : 'GATED: Gate contracts active on withdrawals',
+        note: 'Morpho Vault V2 redeem/withdraw checks canSendShares on behalf of owner and canReceiveAssets for the receiver. An unset gate (address(0)) removes that gate restriction; it does not by itself guarantee sufficient redemption liquidity.',
       },
       financialState: {
-        totalAssetsRaw: totalAssets.toString(),
-        totalAssetsFormatted: `$${Number(formatUnits(totalAssets, 6)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`,
+        totalAssetsOrTvlRaw: totalAssets.toString(),
+        totalAssetsOrTvlFormatted: `$${Number(formatUnits(totalAssets, 6)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`,
         totalSupplyRaw: totalSupply.toString(),
         totalSupplyFormatted: Number(formatUnits(totalSupply, 18)).toLocaleString('en-US', {
           minimumFractionDigits: 4,
           maximumFractionDigits: 4,
         }),
         liquidityAdapter,
+        liquidityDistinctionNote:
+          "totalAssets represents the vault's total assets / TVL across all market allocations, not immediately available idle redemption liquidity. Successful redemption depends on available market liquidity and adapter deallocation.",
       },
-      pendingFeeProposal: pendingProposal,
+      recentManagementFeeSubmissions,
     },
     provenance: {
-      canonicalMorphoFactory: '0x4501125508079A99ebBebCE205DeC9593C2b5857',
+      canonicalMorphoFactory: FACTORY_ADDRESS,
+      factoryRecognition: isV2,
+      factoryVerificationStatement:
+        'The referenced Base Morpho Vault V2 factory returns isVaultV2(vault) == true.',
       factoryRuntimeSha256: 'cf0f79d0fb41a563e915b81cefb581f74acb46336cee022c1991671d9e575d8e',
       morphoVaultV2Commit: '6f2af6602e05d9e123a87c1067712a4566608044',
       solidityCompiler: '0.8.28 (viaIR, 100000 runs, cancun)',
