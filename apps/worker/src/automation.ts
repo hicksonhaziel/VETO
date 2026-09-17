@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
+import type { IntentState } from '@veto/core';
 import { KeeperHubClient } from '@veto/keeperhub';
 import { Pool } from 'pg';
 import { createPublicClient, getAddress, http, type Address } from 'viem';
@@ -18,6 +19,14 @@ type AutomationConfig = MorphoScannerConfig & {
   rpcUrl: string;
   pollIntervalMs: number;
 };
+
+export const WAITING_INTENT_STATES: ReadonlySet<IntentState> = new Set([
+  'PENDING',
+  'CONFIRMING',
+  'UNKNOWN',
+  'RECONCILING',
+  'DISPUTED',
+]);
 
 function executionMode(value: string | undefined): 'direct' | 'conditional' {
   const mode = value ?? 'conditional';
@@ -140,7 +149,10 @@ export async function startAutomation(config: AutomationConfig) {
             transactionHash: result.transactionHash,
           }),
         );
-        // claimNext rotates unresolved attempts by updated_at so another mandate can progress.
+        if (WAITING_INTENT_STATES.has(result.state)) {
+          // An operation waiting for external information yields control for this tick.
+          break;
+        }
       }
     } catch (error) {
       console.error(

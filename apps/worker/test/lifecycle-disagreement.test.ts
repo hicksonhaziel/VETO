@@ -150,7 +150,11 @@ postgresTest(
     const txHash = `0x${'a'.repeat(64)}` as const;
     const client = {
       simulateContractCall: async () => ({}),
-      submitContractCall: async () => ({ executionId: 'exec-a', state: 'pending' as const, raw: {} }),
+      submitContractCall: async () => ({
+        executionId: 'exec-a',
+        state: 'pending' as const,
+        raw: {},
+      }),
       checkAndExecute: async () => ({
         executed: true as const,
         executionId: 'exec-a',
@@ -191,7 +195,11 @@ postgresTest(
     const txHash = `0x${'c'.repeat(64)}` as const;
     const client = {
       simulateContractCall: async () => ({}),
-      submitContractCall: async () => ({ executionId: 'exec-c', state: 'pending' as const, raw: {} }),
+      submitContractCall: async () => ({
+        executionId: 'exec-c',
+        state: 'pending' as const,
+        raw: {},
+      }),
       checkAndExecute: async () => ({
         executed: true as const,
         executionId: 'exec-c',
@@ -232,7 +240,11 @@ postgresTest(
     const txHash = `0x${'b'.repeat(64)}` as const;
     const client = {
       simulateContractCall: async () => ({}),
-      submitContractCall: async () => ({ executionId: 'exec-b', state: 'pending' as const, raw: {} }),
+      submitContractCall: async () => ({
+        executionId: 'exec-b',
+        state: 'pending' as const,
+        raw: {},
+      }),
       checkAndExecute: async () => ({
         executed: true as const,
         executionId: 'exec-b',
@@ -271,7 +283,11 @@ postgresTest(
     const recoveredHash = `0x${'e'.repeat(64)}` as const;
     const client = {
       simulateContractCall: async () => ({}),
-      submitContractCall: async () => ({ executionId: 'exec-e', state: 'pending' as const, raw: {} }),
+      submitContractCall: async () => ({
+        executionId: 'exec-e',
+        state: 'pending' as const,
+        raw: {},
+      }),
       checkAndExecute: async () => ({
         executed: true as const,
         executionId: 'exec-e',
@@ -310,7 +326,7 @@ postgresTest(
 );
 
 postgresTest(
-  'Regression 11 (Case E pre-broadcast failure): KeeperHub failed + no tx hash + no attributable log => settles BLOCKED without infinite loop',
+  'Regression 11 (Case E pre-broadcast failure): KeeperHub failed + no tx hash + no log => bounded grace in RECONCILING then BLOCKED without infinite loop',
   async (context) => {
     const { store } = await setupStore(context);
     const ready = makeReadyIntent('prop-case-e-nobroadcast', '0x5555');
@@ -318,7 +334,11 @@ postgresTest(
 
     const client = {
       simulateContractCall: async () => ({}),
-      submitContractCall: async () => ({ executionId: 'exec-e-none', state: 'pending' as const, raw: {} }),
+      submitContractCall: async () => ({
+        executionId: 'exec-e-none',
+        state: 'pending' as const,
+        raw: {},
+      }),
       checkAndExecute: async () => ({
         executed: true as const,
         executionId: 'exec-e-none',
@@ -343,14 +363,27 @@ postgresTest(
       };
     };
 
-    const pipeline = new ExitPipeline(store, client, reconcile);
-    const result = await pipeline.runOnce('w1');
+    // First attempt with 20ms grace: must start grace window in RECONCILING, NOT prematurely BLOCKED
+    const pipeline = new ExitPipeline(store, client, reconcile, { reconciliationGraceMs: 20 });
+    const pass1 = await pipeline.runOnce('w1');
 
-    assert.equal(result?.state, 'BLOCKED');
-    assert.equal(result?.lastError, 'KEEPERHUB_EXECUTION_FAILED');
-    assert.equal(result?.reconciliation?.economicEffect, 'none');
-    assert.equal(result?.reconciliation?.transactionHash, null);
+    assert.equal(pass1?.state, 'RECONCILING');
+    assert.equal(pass1?.reconciliation?.uncertainBroadcast, true);
+    assert.equal(pass1?.reconciliation?.keeperHubState, 'failed');
+    assert(pass1?.reconciliation?.graceDeadline);
     assert.equal(reconcileCalls, 1);
+
+    // Wait for the 20ms grace window to expire
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    // Second attempt after grace expires
+    const pass2 = await pipeline.runOnce('w2');
+
+    assert.equal(pass2?.state, 'BLOCKED');
+    assert.equal(pass2?.lastError, 'KEEPERHUB_EXECUTION_FAILED');
+    assert.equal(pass2?.reconciliation?.economicEffect, 'none');
+    assert.equal(pass2?.reconciliation?.transactionHash, null);
+    assert(pass2?.reconciliation?.graceExpiredAt);
   },
 );
 
@@ -364,7 +397,11 @@ postgresTest(
     const txHash = `0x${'d'.repeat(64)}` as const;
     const client = {
       simulateContractCall: async () => ({}),
-      submitContractCall: async () => ({ executionId: 'exec-d', state: 'pending' as const, raw: {} }),
+      submitContractCall: async () => ({
+        executionId: 'exec-d',
+        state: 'pending' as const,
+        raw: {},
+      }),
       checkAndExecute: async () => ({
         executed: true as const,
         executionId: 'exec-d',
@@ -413,7 +450,11 @@ postgresTest(
     let pollCount = 0;
     const client = {
       simulateContractCall: async () => ({}),
-      submitContractCall: async () => ({ executionId: 'exec-restart', state: 'pending' as const, raw: {} }),
+      submitContractCall: async () => ({
+        executionId: 'exec-restart',
+        state: 'pending' as const,
+        raw: {},
+      }),
       checkAndExecute: async () => ({
         executed: true as const,
         executionId: 'exec-restart',
@@ -424,7 +465,11 @@ postgresTest(
       getExecution: async () => {
         pollCount += 1;
         if (pollCount === 1) {
-          return { executionId: 'exec-restart', state: 'pending' as const, raw: { status: 'pending' } };
+          return {
+            executionId: 'exec-restart',
+            state: 'pending' as const,
+            raw: { status: 'pending' },
+          };
         }
         return {
           executionId: 'exec-restart',

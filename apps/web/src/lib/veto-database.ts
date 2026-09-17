@@ -21,9 +21,13 @@ export async function ensureManagedRulesSchema(): Promise<void> {
   migration ??= (async () => {
     const migrationDirectory = path.resolve(process.cwd(), '../../db/migrations');
     const scripts = await Promise.all(
-      ['0001_exit_intents.sql', '0002_proposal_decisions.sql', '0003_managed_rules.sql', '0004_keeperhub_conditional.sql', '0005_proposal_attempts.sql'].map(
-        (name) => readFile(path.join(migrationDirectory, name), 'utf8'),
-      ),
+      [
+        '0001_exit_intents.sql',
+        '0002_proposal_decisions.sql',
+        '0003_managed_rules.sql',
+        '0004_keeperhub_conditional.sql',
+        '0005_proposal_attempts.sql',
+      ].map((name) => readFile(path.join(migrationDirectory, name), 'utf8')),
     );
     for (const sql of scripts) await database().query(sql);
     const verification = await database().query<{

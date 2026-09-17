@@ -26,6 +26,8 @@ test('allows unknown execution recovery but rejects replay from a terminal state
   assert.equal(canTransition('RECONCILING', 'EXITED'), true);
   assert.equal(canTransition('EXITED', 'SUBMITTING'), false);
   assert.equal(canTransition('CONFIRMING', 'BLOCKED'), true);
+  assert.equal(canTransition('PENDING', 'RECONCILING'), true);
+  assert.equal(canTransition('RECONCILING', 'RECONCILING'), true);
 });
 
 test('builds one normalized key for a financial operation', () => {

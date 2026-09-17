@@ -28,6 +28,7 @@ export class ExitPipeline {
       'simulateContractCall' | 'submitContractCall' | 'checkAndExecute' | 'getExecution'
     >,
     private readonly reconcile: ExitReconciler,
+    private readonly options?: { reconciliationGraceMs?: number },
   ) {}
 
   async runOnce(workerId: string): Promise<StoredExitIntent | undefined> {
@@ -69,7 +70,10 @@ export class ExitPipeline {
           continue;
         }
 
-        if (intent.state === 'SUBMITTING' || intent.state === 'RECONCILING') {
+        if (
+          intent.state === 'SUBMITTING' ||
+          (intent.state === 'RECONCILING' && !intent.executionId)
+        ) {
           try {
             const wasRecovering = intent.state === 'RECONCILING';
             const conditional = intent.executionMode === 'conditional';
@@ -133,6 +137,95 @@ export class ExitPipeline {
               detail: { stage: 'submission', outcome: 'unknown' },
             });
           }
+        }
+
+        if (intent.state === 'RECONCILING' && intent.executionId) {
+          // 1. Check if an attributable Exited log has appeared onchain.
+          const recovered = await this.reconcile(intent);
+          if (recovered.ok && recovered.detail.transactionHash) {
+            intent = await this.store.transition(intent.operationKey, workerId, 'CONFIRMING', {
+              transactionHash: recovered.detail.transactionHash as `0x${string}`,
+              reconciliation: {
+                ...(intent.reconciliation ?? {}),
+                ...recovered.detail,
+                recoveredFromGuardEvent: true,
+                platformDisagreement: true,
+                keeperHubReported: 'failed',
+                chainConfirmed: 'EXITED',
+              },
+              detail: {
+                recoveredFromGuardEvent: true,
+                platformDisagreement: true,
+              },
+            });
+            continue;
+          }
+
+          // 2. Check if KeeperHub execution has updated with a transaction hash.
+          const execution = await this.keeperHub.getExecution(intent.executionId);
+          const hash = execution.transactionHash ?? intent.transactionHash;
+          if (hash) {
+            intent = await this.store.transition(intent.operationKey, workerId, 'CONFIRMING', {
+              transactionHash: hash,
+              reconciliation: {
+                ...(intent.reconciliation ?? {}),
+                keeperHubState: execution.state,
+                ...(execution.state === 'failed'
+                  ? { platformDisagreement: true, keeperHubReported: 'failed' }
+                  : {}),
+              },
+              detail: {
+                keeperHubState: execution.state,
+                ...(execution.state === 'failed' ? { platformDisagreement: true } : {}),
+              },
+            });
+            continue;
+          }
+
+          // 3. Neither event nor hash found yet. Check durable grace window.
+          const graceMs = this.options?.reconciliationGraceMs ?? 60_000;
+          const now = Date.now();
+          const existingDeadline = intent.reconciliation?.graceDeadline
+            ? new Date(intent.reconciliation.graceDeadline as string).getTime()
+            : now + graceMs;
+
+          if (now < existingDeadline) {
+            const attempts =
+              typeof intent.reconciliation?.reconciliationAttempts === 'number'
+                ? (intent.reconciliation.reconciliationAttempts as number) + 1
+                : 2;
+            return await this.store.transition(intent.operationKey, workerId, 'RECONCILING', {
+              reconciliation: {
+                ...(intent.reconciliation ?? {}),
+                reconciliationAttempts: attempts,
+                lastCheckedAt: new Date(now).toISOString(),
+              },
+              detail: {
+                stage: 'reconciliation_grace_waiting',
+                attempts,
+                graceDeadline: intent.reconciliation?.graceDeadline,
+              },
+            });
+          }
+
+          // Conclusive pre-broadcast failure: grace window has elapsed with zero attributable onchain movement.
+          return await this.store.transition(intent.operationKey, workerId, 'BLOCKED', {
+            lastError: 'KEEPERHUB_EXECUTION_FAILED',
+            reconciliation: {
+              ...(intent.reconciliation ?? {}),
+              economicEffect: 'none',
+              transactionHash: null,
+              graceExpiredAt: new Date(now).toISOString(),
+            },
+            detail: {
+              stage: 'keeperhub_execution',
+              keeperHubState: execution.state,
+              broadcast: false,
+              economicEffect: 'none',
+              noAttributableEvent: true,
+              graceWindowElapsed: true,
+            },
+          });
         }
 
         if (intent.state === 'UNKNOWN' || intent.state === 'DISPUTED') {
@@ -200,16 +293,63 @@ export class ExitPipeline {
               continue;
             }
             if (execution.state === 'failed') {
-              // Conclusive pre-broadcast failure with no onchain movement (CASE E).
+              const graceMs = this.options?.reconciliationGraceMs ?? 60_000;
+              const now = Date.now();
+              const existingDeadline = intent.reconciliation?.graceDeadline
+                ? new Date(intent.reconciliation.graceDeadline as string).getTime()
+                : undefined;
+
+              if (!existingDeadline) {
+                // First observation of failed with no hash and no onchain log.
+                // Start bounded reconciliation grace window in RECONCILING.
+                const deadline = new Date(now + graceMs).toISOString();
+                return await this.store.transition(intent.operationKey, workerId, 'RECONCILING', {
+                  reconciliation: {
+                    ...(intent.reconciliation ?? {}),
+                    keeperHubState: 'failed',
+                    uncertainBroadcast: true,
+                    graceStartedAt: new Date(now).toISOString(),
+                    graceDeadline: deadline,
+                    reconciliationAttempts: 1,
+                  },
+                  detail: {
+                    stage: 'reconciliation_grace_started',
+                    graceDeadline: deadline,
+                    noAttributableEvent: true,
+                  },
+                });
+              }
+
+              if (now < existingDeadline) {
+                // Grace window still active.
+                return await this.store.transition(intent.operationKey, workerId, 'RECONCILING', {
+                  reconciliation: {
+                    ...(intent.reconciliation ?? {}),
+                    lastCheckedAt: new Date(now).toISOString(),
+                  },
+                  detail: {
+                    stage: 'reconciliation_grace_waiting',
+                    graceDeadline: intent.reconciliation?.graceDeadline,
+                  },
+                });
+              }
+
+              // Conclusive pre-broadcast failure: grace window has elapsed with zero attributable onchain movement.
               return await this.store.transition(intent.operationKey, workerId, 'BLOCKED', {
                 lastError: 'KEEPERHUB_EXECUTION_FAILED',
-                reconciliation: { economicEffect: 'none', transactionHash: null },
+                reconciliation: {
+                  ...(intent.reconciliation ?? {}),
+                  economicEffect: 'none',
+                  transactionHash: null,
+                  graceExpiredAt: new Date(now).toISOString(),
+                },
                 detail: {
                   stage: 'keeperhub_execution',
                   keeperHubState: execution.state,
                   broadcast: false,
                   economicEffect: 'none',
                   noAttributableEvent: true,
+                  graceWindowElapsed: true,
                 },
               });
             }
@@ -307,9 +447,7 @@ export class ExitPipeline {
             detail: {
               chainEffectVerified: false,
               reconciliation: result.detail,
-              ...(hadPlatformDisagreement
-                ? { keeperHubReported: 'failed' }
-                : {}),
+              ...(hadPlatformDisagreement ? { keeperHubReported: 'failed' } : {}),
             },
           });
         }

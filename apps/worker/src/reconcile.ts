@@ -82,7 +82,10 @@ export function createChainReconciler<
         return {
           ok: false,
           pending: true,
-          detail: { reason: 'LOG_SEARCH_FAILED', error: error instanceof Error ? error.message : String(error) },
+          detail: {
+            reason: 'LOG_SEARCH_FAILED',
+            error: error instanceof Error ? error.message : String(error),
+          },
         };
       }
       if (!transactionHash) {
@@ -97,10 +100,18 @@ export function createChainReconciler<
     try {
       receipt = await client.getTransactionReceipt({ hash: transactionHash });
     } catch {
-      return { ok: false, pending: true, detail: { transactionHash, reason: 'RECEIPT_UNAVAILABLE' } };
+      return {
+        ok: false,
+        pending: true,
+        detail: { transactionHash, reason: 'RECEIPT_UNAVAILABLE' },
+      };
     }
     if (receipt.status !== 'success') {
-      return { ok: false, reverted: true, detail: { transactionHash, receiptStatus: receipt.status, economicEffect: 'none' } };
+      return {
+        ok: false,
+        reverted: true,
+        detail: { transactionHash, receiptStatus: receipt.status, economicEffect: 'none' },
+      };
     }
     const events = parseEventLogs({ abi: guardAbi, logs: receipt.logs, eventName: 'Exited' });
     const exit = events.find(
@@ -114,13 +125,26 @@ export function createChainReconciler<
         detail: { receiptStatus: receipt.status, expectedExitEvent: false },
       };
     }
-    const mandate = await client.readContract({
-      address: intent.guard,
-      abi: guardAbi,
-      functionName: 'mandates',
-      args: [BigInt(intent.mandateId)],
-      blockNumber: receipt.blockNumber,
-    });
+    let mandate;
+    try {
+      mandate = await client.readContract({
+        address: intent.guard,
+        abi: guardAbi,
+        functionName: 'mandates',
+        args: [BigInt(intent.mandateId)],
+        blockNumber: receipt.blockNumber,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        pending: true,
+        detail: {
+          transactionHash,
+          reason: 'MANDATE_READ_FAILED',
+          error: error instanceof Error ? error.message : String(error),
+        },
+      };
+    }
     const proposalMatches = exit.args.proposalHash === keccak256(intent.proposalData);
     const ownerMatches = getAddress(exit.args.owner) === getAddress(mandate[0]);
     const shareAmountMatches = exit.args.shares === mandate[2];
