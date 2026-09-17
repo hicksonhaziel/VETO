@@ -29,12 +29,20 @@ export async function GET(request: NextRequest) {
   try {
     await ensureManagedRulesSchema();
     const result = await database().query(
-      `SELECT r.*, i.state AS execution_state, i.execution_id, i.transaction_hash AS exit_transaction_hash
+      `SELECT r.*,
+              latest_intent.state AS execution_state,
+              latest_intent.execution_id,
+              latest_intent.transaction_hash AS exit_transaction_hash
        FROM managed_rules r
-       LEFT JOIN exit_intents i
-         ON i.chain_id = r.chain_id
-        AND i.guard_address = r.guard_address
-        AND i.mandate_id = r.mandate_id
+       LEFT JOIN LATERAL (
+         SELECT i.state, i.execution_id, i.transaction_hash
+         FROM exit_intents i
+         WHERE i.chain_id = r.chain_id
+           AND i.guard_address = r.guard_address
+           AND i.mandate_id = r.mandate_id
+         ORDER BY (CASE WHEN i.state = 'EXITED' THEN 0 ELSE 1 END), i.created_at DESC
+         LIMIT 1
+       ) latest_intent ON true
        WHERE r.owner_address = $1
        ORDER BY r.created_at DESC`,
       [value.toLowerCase()],

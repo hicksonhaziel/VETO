@@ -63,8 +63,10 @@ postgresTest(
     const store = new PostgresIntentStore(pool);
     for (const migration of [
       '0001_exit_intents.sql',
+      '0002_proposal_decisions.sql',
       '0003_managed_rules.sql',
       '0004_keeperhub_conditional.sql',
+      '0005_proposal_attempts.sql',
     ]) {
       await store.applyMigration(
         await readFile(new URL(`../../../db/migrations/${migration}`, import.meta.url), 'utf8'),

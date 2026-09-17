@@ -112,11 +112,6 @@ export async function scanConfiguredMandate<
     args: [config.mandateId],
     blockNumber: toBlock,
   });
-  const operationKey = financialOperationKey({
-    chainId: config.chainId,
-    guard: config.guard,
-    mandateId: config.mandateId,
-  });
   const proposals = await scanManagementFeeProposals({
     client,
     vault: config.vault,
@@ -128,6 +123,12 @@ export async function scanConfiguredMandate<
 
   for (const proposal of proposals) {
     const identity = proposalIdentity(config.chainId, proposal);
+    const operationKey = financialOperationKey({
+      chainId: config.chainId,
+      guard: config.guard,
+      mandateId: config.mandateId,
+      proposalIdentity: identity,
+    });
     let decision: string = proposal.status;
     let assessment: Record<string, unknown> = { status: proposal.status };
 

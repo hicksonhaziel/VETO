@@ -72,6 +72,7 @@ async function loadMigrations(): Promise<string[]> {
       '0002_proposal_decisions.sql',
       '0003_managed_rules.sql',
       '0004_keeperhub_conditional.sql',
+      '0005_proposal_attempts.sql',
     ].map((name) => readFile(new URL(`../../../db/migrations/${name}`, import.meta.url), 'utf8')),
   );
 }
@@ -139,7 +140,7 @@ export async function startAutomation(config: AutomationConfig) {
             transactionHash: result.transactionHash,
           }),
         );
-        if (['PENDING', 'UNKNOWN', 'DISPUTED'].includes(result.state)) break;
+        // claimNext rotates unresolved attempts by updated_at so another mandate can progress.
       }
     } catch (error) {
       console.error(

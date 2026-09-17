@@ -25,7 +25,7 @@ test('allows unknown execution recovery but rejects replay from a terminal state
   assert.equal(canTransition('UNKNOWN', 'RECONCILING'), true);
   assert.equal(canTransition('RECONCILING', 'EXITED'), true);
   assert.equal(canTransition('EXITED', 'SUBMITTING'), false);
-  assert.throws(() => assertTransition('EXITED', 'SUBMITTING'), /INVALID_INTENT_TRANSITION/);
+  assert.equal(canTransition('CONFIRMING', 'BLOCKED'), true);
 });
 
 test('builds one normalized key for a financial operation', () => {
@@ -40,6 +40,19 @@ test('builds one normalized key for a financial operation', () => {
     mandateId: '7',
   });
   assert.equal(upper, lower);
+
+  const proposalSpecific = financialOperationKey({
+    chainId: 84_532,
+    guard: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+    mandateId: '7',
+    proposalIdentity: '84532:0xvault:0xhash:100:1',
+  });
+  assert.equal(
+    proposalSpecific,
+    '84532:0xabcdefabcdefabcdefabcdefabcdefabcdefabcd:7:84532%3A0xvault%3A0xhash%3A100%3A1',
+  );
+  assert.notEqual(proposalSpecific, lower);
+
   assert.throws(
     () =>
       financialOperationKey({

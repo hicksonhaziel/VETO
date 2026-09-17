@@ -35,6 +35,7 @@ export function buildReadyExitIntent(options: {
     chainId: options.chainId,
     guard: options.guard,
     mandateId: options.mandateId,
+    proposalIdentity: options.proposalIdentity,
   });
   const request = {
     contractAddress: options.guard,

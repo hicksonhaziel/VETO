@@ -27,7 +27,7 @@ const transitions: Readonly<Record<IntentState, readonly IntentState[]>> = {
   SIMULATED: ['SUBMITTING', 'BLOCKED', 'CANCELLED', 'EXPIRED'],
   SUBMITTING: ['PENDING', 'UNKNOWN', 'BLOCKED'],
   PENDING: ['CONFIRMING', 'UNKNOWN', 'BLOCKED'],
-  CONFIRMING: ['EXITED', 'DISPUTED', 'UNKNOWN'],
+  CONFIRMING: ['EXITED', 'DISPUTED', 'UNKNOWN', 'BLOCKED'],
   EXITED: [],
   UNKNOWN: ['RECONCILING', 'DISPUTED'],
   RECONCILING: ['PENDING', 'CONFIRMING', 'EXITED', 'BLOCKED', 'DISPUTED'],
@@ -48,6 +48,7 @@ export function financialOperationKey(options: {
   chainId: number;
   guard: string;
   mandateId: bigint | string;
+  proposalIdentity?: string;
 }): string {
   if (!Number.isSafeInteger(options.chainId) || options.chainId <= 0) {
     throw new Error('INVALID_CHAIN_ID');
@@ -56,7 +57,10 @@ export function financialOperationKey(options: {
   if (!/^0x[0-9a-f]{40}$/.test(guard)) throw new Error('INVALID_GUARD_ADDRESS');
   const mandateId = BigInt(options.mandateId);
   if (mandateId < 0n) throw new Error('INVALID_MANDATE_ID');
-  return `${options.chainId}:${guard}:${mandateId}`;
+  const mandateKey = `${options.chainId}:${guard}:${mandateId}`;
+  return options.proposalIdentity
+    ? `${mandateKey}:${encodeURIComponent(options.proposalIdentity)}`
+    : mandateKey;
 }
 
 export type ContractCallRequest = {

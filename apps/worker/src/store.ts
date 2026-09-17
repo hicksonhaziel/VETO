@@ -98,7 +98,7 @@ export class PostgresIntentStore {
         serialized_request, idempotency_key, execution_mode,
         conditional_request_json, serialized_conditional_request
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'READY', $8::jsonb, $9, $10, $11, $12::jsonb, $13)
-      ON CONFLICT (operation_key) DO NOTHING`,
+      ON CONFLICT DO NOTHING`,
       [
         intent.operationKey,
         intent.chainId,
@@ -139,10 +139,19 @@ export class PostgresIntentStore {
     try {
       await client.query('BEGIN');
       const selected = await client.query<IntentRow>(
-        `SELECT * FROM exit_intents
-         WHERE state IN ('READY', 'SIMULATED', 'SUBMITTING', 'PENDING', 'CONFIRMING', 'UNKNOWN', 'RECONCILING', 'DISPUTED')
-           AND (claimed_at IS NULL OR claimed_at < now() - ($1 * interval '1 second'))
-         ORDER BY created_at, operation_key
+        `SELECT i.* FROM exit_intents i
+         WHERE i.state IN ('READY', 'SIMULATED', 'SUBMITTING', 'PENDING', 'CONFIRMING', 'UNKNOWN', 'RECONCILING', 'DISPUTED')
+           AND (i.claimed_at IS NULL OR i.claimed_at < now() - ($1 * interval '1 second'))
+           AND NOT EXISTS (
+             SELECT 1 FROM exit_intents prior
+             WHERE prior.chain_id = i.chain_id AND prior.guard_address = i.guard_address
+               AND prior.mandate_id = i.mandate_id AND prior.operation_key <> i.operation_key
+               AND (prior.state = 'EXITED' OR (
+                 prior.state NOT IN ('BLOCKED', 'CANCELLED', 'EXPIRED', 'NOT_APPLICABLE')
+                 AND (prior.created_at, prior.operation_key) < (i.created_at, i.operation_key)
+               ))
+           )
+         ORDER BY i.updated_at, i.created_at, i.operation_key
          FOR UPDATE SKIP LOCKED
          LIMIT 1`,
         [leaseSeconds],
