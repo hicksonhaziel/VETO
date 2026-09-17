@@ -14,7 +14,8 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "workspace:list": "turbo ls"
+    "workspace:list": "turbo ls",
+    "live:morpho": "pnpm --filter @veto/contracts live:morpho"
   },
   "devDependencies": {
     "@types/node": "22.20.2",

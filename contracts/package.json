@@ -7,7 +7,8 @@
     "build": "node scripts/compile.mjs",
     "lint": "node scripts/compile.mjs --check",
     "test": "node --test test/**/*.test.mjs",
-    "typecheck": "node scripts/compile.mjs --check"
+    "typecheck": "node scripts/compile.mjs --check",
+    "live:morpho": "node scripts/live-morpho-read.mjs"
   },
   "devDependencies": {
     "@foundry-rs/anvil": "1.7.1",

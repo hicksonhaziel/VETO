@@ -1,0 +1,71 @@
+{
+  "checkedAt": "2026-09-17T23:19:32.262Z",
+  "network": {
+    "name": "Base Mainnet",
+    "chainId": 8453,
+    "rpcEndpoint": "https://mainnet.base.org",
+    "blockNumber": "51448911",
+    "blockTimestamp": "1789687169"
+  },
+  "vault": {
+    "address": "0x050cE30b927Da55177A4914EC73480238BAD56f0",
+    "name": "Gauntlet USDC Prime",
+    "symbol": "gtusdcp",
+    "decimals": 18,
+    "asset": {
+      "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "symbol": "USDC",
+      "decimals": 6,
+      "isBaseUSDC": true
+    },
+    "factory": {
+      "address": "0x4501125508079A99ebBebCE205DeC9593C2b5857",
+      "recognizedByFactory": true,
+      "isVaultV2": true
+    },
+    "governance": {
+      "owner": "0x5a4E19842e09000a582c20A4f524C26Fb48Dd4D0",
+      "curator": "0x9E33faAE38ff641094fa68c65c2cE600b3410585",
+      "knownCuratorName": "Gauntlet"
+    },
+    "fees": {
+      "managementFeeRatePerSecond": "0",
+      "managementFeeAnnualizedPercent": "0.0000%",
+      "managementFeeRecipient": "0x34702F5F789196A723B8DF6334922f145A7db1b2",
+      "performanceFeeRate": "0",
+      "performanceFeeRecipient": "0x34702F5F789196A723B8DF6334922f145A7db1b2"
+    },
+    "timelocks": {
+      "setManagementFeeSelector": "0xfe56e232",
+      "managementFeeTimelockSeconds": "259200",
+      "managementFeeTimelockDays": "3.0",
+      "setManagementFeeAbdicated": false
+    },
+    "gates": {
+      "receiveAssetsGate": "0x0000000000000000000000000000000000000000",
+      "receiveSharesGate": "0x0000000000000000000000000000000000000000",
+      "sendAssetsGate": "0x0000000000000000000000000000000000000000",
+      "sendSharesGate": "0x0000000000000000000000000000000000000000",
+      "exitRestricted": false,
+      "exitabilityAssessment": "UNRESTRICTED: No gate contracts intercept or block share redemptions or asset withdrawals"
+    },
+    "financialState": {
+      "totalAssetsRaw": "171837808590239",
+      "totalAssetsFormatted": "$171,837,808.59 USDC",
+      "totalSupplyRaw": "164953385894018001542467662",
+      "totalSupplyFormatted": "164,953,385.8940",
+      "liquidityAdapter": "0x2fEcd40f436CA170D2478a58Da898FcE93988eef"
+    },
+    "pendingFeeProposal": {
+      "detected": false,
+      "scannedBlockRange": "51446911 - 51448911",
+      "status": "no_pending_management_fee_proposal_in_scanned_range"
+    }
+  },
+  "provenance": {
+    "canonicalMorphoFactory": "0x4501125508079A99ebBebCE205DeC9593C2b5857",
+    "factoryRuntimeSha256": "cf0f79d0fb41a563e915b81cefb581f74acb46336cee022c1991671d9e575d8e",
+    "morphoVaultV2Commit": "6f2af6602e05d9e123a87c1067712a4566608044",
+    "solidityCompiler": "0.8.28 (viaIR, 100000 runs, cancun)"
+  }
+}

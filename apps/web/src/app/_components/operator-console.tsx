@@ -561,6 +561,36 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
       </section>
       <section className="evidence-grid">
         <article className="surface evidence-facts">
+          <span className="panel-label">Production compatibility</span>
+          <h2>Gauntlet USDC Prime</h2>
+          <p>
+            VETO operates against real Morpho Vault V2 architecture. Public testnet execution runs
+            on Base Sepolia with valueless test tokens, while read and simulation proofs directly
+            target the live Gauntlet vault on Base Mainnet.
+          </p>
+          <dl>
+            <div>
+              <dt>LIVE MAINNET READ</dt>
+              <dd>Read-only state verification (0x050c…56f0, timelock 3.0d)</dd>
+            </div>
+            <div>
+              <dt>PINNED FORK</dt>
+              <dd>Simulation of real depositor exit ($3.07M USDC)</dd>
+            </div>
+            <div>
+              <dt>PUBLIC TESTNET EXECUTION</dt>
+              <dd>Live KeeperHub transaction with test token</dd>
+            </div>
+            <div>
+              <dt>Fund Safety</dt>
+              <dd>VETO does not hold or move mainnet depositor funds without authorization</dd>
+            </div>
+          </dl>
+          <ExternalLink href="https://basescan.org/address/0x050cE30b927Da55177A4914EC73480238BAD56f0">
+            Open Gauntlet USDC Prime on Basescan
+          </ExternalLink>
+        </article>
+        <article className="surface evidence-facts">
           <span className="panel-label">Contract provenance</span>
           <h2>Canonical Morpho runtime</h2>
           <p>

@@ -1,18 +1,17 @@
 # VETO
 
-**Depositor-controlled exit rules for protocol changes.**
+**VETO gives Morpho depositors enforceable exit rules for queued vault changes.**
 
 > VETO — your right to leave before the rules change.
 
-VETO lets a Morpho Vault V2 depositor define when their approved position is no longer allowed to
-remain in the vault. The worker observes a supported queued change and asks KeeperHub to submit the
-bounded exit, while `VetoExitGuard` independently rechecks the owner's authorization and the live
-Morpho condition onchain before any shares can move.
+VETO lets a Morpho Vault V2 depositor define when their approved position is no longer allowed to remain in the vault. When a supported queued change violates the depositor's policy, VETO coordinates autonomous, conditional redemption through KeeperHub, while `VetoExitGuard` independently rechecks the owner's authorization and the live Morpho state onchain before any shares can move.
 
-**Judge's one-minute path:** [KeeperHub integration map](docs/KEEPERHUB-INTEGRATION.md) →
-[conditional execution proof](evidence/day-8/keeperhub-conditional-execution.md) →
-[lifecycle safety architecture](docs/LIFECYCLE-SAFETY.md). The current
-primary financial path is:
+### Quick Judge Links
+
+- **[Live Morpho Vault V2 Evidence](docs/LIVE-MORPHO-EVIDENCE.md)**: Proof of real Gauntlet USDC Prime compatibility, factory provenance, live read (`pnpm live:morpho`), and real $3.07M depositor exit on pinned Base fork.
+- **[Canonical Evidence Index](evidence/EVIDENCE.md)**: Verified onchain receipts, public conditional block proofs, and TOCTOU defense on Base Sepolia.
+- **[KeeperHub Integration](docs/KEEPERHUB-INTEGRATION.md)**: Idempotent `check-and-execute` conditional integration map and platform disagreement handling.
+- **[Lifecycle Safety & Reconciliation](docs/LIFECYCLE-SAFETY.md)**: Proposal-specific attempt model, queue serialization, bounded recovery, and `DISPUTED` operator quarantine.
 
 ```text
 Morpho → VETO scanner/policy → durable intent → KeeperHub reads executableAt
@@ -21,12 +20,9 @@ Morpho → VETO scanner/policy → durable intent → KeeperHub reads executable
   → VETO receipt/event/state reconciliation → EXITED or DISPUTED
 ```
 
-The worker uses KeeperHub's documented, idempotent `check-and-execute` API rather than a visual
-workflow because that endpoint provides the stable-key lost-response recovery required for a
-financial operation. The proven direct contract-call route remains an explicit fallback.
+The worker uses KeeperHub's documented, idempotent `check-and-execute` API rather than a visual workflow because that endpoint provides the stable-key lost-response recovery required for a financial operation. The proven direct contract-call route remains an explicit fallback.
 
-“Veto” does not mean cancelling Morpho governance or preventing a curator from changing a vault.
-The depositor is vetoing **their own continued participation** by leaving.
+“Veto” does not mean cancelling Morpho governance or preventing a curator from changing a vault. The depositor is vetoing **their own continued participation** by leaving.
 
 ## The problem
 
