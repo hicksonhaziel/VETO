@@ -4,12 +4,15 @@ import { PostgresIntentStore, type StoredExitIntent } from './store.js';
 
 export type ReconciliationResult = {
   ok: boolean;
+  pending?: boolean;
+  reverted?: boolean;
+  noAttributableEvent?: boolean;
   detail: Record<string, unknown>;
 };
 
 export type ExitReconciler = (
   intent: StoredExitIntent,
-  transactionHash: `0x${string}`,
+  transactionHash?: `0x${string}`,
 ) => Promise<ReconciliationResult>;
 
 function errorCode(error: unknown): string {
@@ -133,6 +136,23 @@ export class ExitPipeline {
         }
 
         if (intent.state === 'UNKNOWN' || intent.state === 'DISPUTED') {
+          if (intent.transactionHash) {
+            intent = await this.store.transition(intent.operationKey, workerId, 'CONFIRMING');
+            continue;
+          }
+          if (intent.executionId) {
+            const recovered = await this.reconcile(intent);
+            if (recovered.ok && recovered.detail.transactionHash) {
+              intent = await this.store.transition(intent.operationKey, workerId, 'CONFIRMING', {
+                transactionHash: recovered.detail.transactionHash as `0x${string}`,
+                detail: { recoveredFromGuardEvent: true },
+              });
+              continue;
+            }
+            intent = await this.store.transition(intent.operationKey, workerId, 'RECONCILING');
+            intent = await this.store.transition(intent.operationKey, workerId, 'PENDING');
+            continue;
+          }
           intent = await this.store.transition(intent.operationKey, workerId, 'RECONCILING', {
             detail: { sameRequest: true, sameIdempotencyKey: true },
           });
@@ -146,22 +166,71 @@ export class ExitPipeline {
             });
           }
           const execution = await this.keeperHub.getExecution(intent.executionId);
-          if (execution.state === 'pending') return intent;
-          if (execution.state === 'failed') {
-            return await this.store.transition(intent.operationKey, workerId, 'BLOCKED', {
-              lastError: 'KEEPERHUB_EXECUTION_FAILED',
-              detail: { keeperHubState: execution.state },
-            });
-          }
-          if (execution.state === 'unconfirmed' || !execution.transactionHash) {
+          const hash = execution.transactionHash ?? intent.transactionHash;
+          if (!hash) {
+            if (execution.state === 'pending') return intent;
+            const recovered = await this.reconcile(intent);
+            if (recovered.ok && recovered.detail.transactionHash) {
+              intent = await this.store.transition(intent.operationKey, workerId, 'CONFIRMING', {
+                transactionHash: recovered.detail.transactionHash as `0x${string}`,
+                reconciliation: {
+                  ...recovered.detail,
+                  recoveredFromGuardEvent: true,
+                  keeperHubState: execution.state,
+                  ...(execution.state === 'failed'
+                    ? {
+                        platformDisagreement: true,
+                        keeperHubReported: 'failed',
+                        chainConfirmed: 'EXITED',
+                      }
+                    : {}),
+                },
+                detail: {
+                  keeperHubState: execution.state,
+                  recoveredFromGuardEvent: true,
+                  ...(execution.state === 'failed'
+                    ? {
+                        platformDisagreement: true,
+                        keeperHubReported: 'failed',
+                        chainConfirmed: 'EXITED',
+                      }
+                    : {}),
+                },
+              });
+              continue;
+            }
+            if (execution.state === 'failed') {
+              // Conclusive pre-broadcast failure with no onchain movement (CASE E).
+              return await this.store.transition(intent.operationKey, workerId, 'BLOCKED', {
+                lastError: 'KEEPERHUB_EXECUTION_FAILED',
+                reconciliation: { economicEffect: 'none', transactionHash: null },
+                detail: {
+                  stage: 'keeperhub_execution',
+                  keeperHubState: execution.state,
+                  broadcast: false,
+                  economicEffect: 'none',
+                  noAttributableEvent: true,
+                },
+              });
+            }
             return await this.store.transition(intent.operationKey, workerId, 'UNKNOWN', {
-              lastError: 'KEEPERHUB_EXECUTION_UNCONFIRMED',
+              lastError: 'KEEPERHUB_OUTCOME_UNRESOLVED',
               detail: { keeperHubState: execution.state },
             });
           }
           intent = await this.store.transition(intent.operationKey, workerId, 'CONFIRMING', {
-            transactionHash: execution.transactionHash,
-            detail: { keeperHubState: execution.state },
+            transactionHash: hash,
+            reconciliation: {
+              ...(intent.reconciliation ?? {}),
+              keeperHubState: execution.state,
+              ...(execution.state === 'failed'
+                ? { platformDisagreement: true, keeperHubReported: 'failed' }
+                : {}),
+            },
+            detail: {
+              keeperHubState: execution.state,
+              ...(execution.state === 'failed' ? { platformDisagreement: true } : {}),
+            },
           });
           continue;
         }
@@ -173,16 +242,76 @@ export class ExitPipeline {
             });
           }
           const result = await this.reconcile(intent, intent.transactionHash);
-          return await this.store.transition(
-            intent.operationKey,
-            workerId,
-            result.ok ? 'EXITED' : 'DISPUTED',
-            {
-              reconciliation: result.detail,
-              lastError: result.ok ? null : 'CHAIN_EFFECT_MISMATCH',
-              detail: { chainEffectVerified: result.ok },
+          if (result.pending) {
+            // Receipt temporarily unavailable (CASE D). Remain in CONFIRMING, do not fail.
+            return intent;
+          }
+          const hadPlatformDisagreement =
+            intent.reconciliation?.keeperHubState === 'failed' ||
+            intent.reconciliation?.platformDisagreement === true;
+          if (result.reverted) {
+            // Confirmed revert onchain (CASE C). Settles to BLOCKED with zero economic effect.
+            return await this.store.transition(intent.operationKey, workerId, 'BLOCKED', {
+              reconciliation: {
+                ...(intent.reconciliation ?? {}),
+                ...result.detail,
+                economicEffect: 'none',
+                reverted: true,
+              },
+              lastError: 'CHAIN_TRANSACTION_REVERTED',
+              detail: {
+                chainEffectVerified: false,
+                reverted: true,
+                economicEffect: 'none',
+                ...(hadPlatformDisagreement
+                  ? { keeperHubReported: 'failed', chainConfirmed: 'reverted' }
+                  : {}),
+              },
+            });
+          }
+          if (result.ok) {
+            // Confirmed exact expected exit (CASE A).
+            return await this.store.transition(intent.operationKey, workerId, 'EXITED', {
+              reconciliation: {
+                ...(intent.reconciliation ?? {}),
+                ...result.detail,
+                ...(hadPlatformDisagreement
+                  ? {
+                      platformDisagreement: true,
+                      keeperHubReported: 'failed',
+                      chainConfirmed: 'EXITED',
+                    }
+                  : {}),
+              },
+              lastError: null,
+              detail: {
+                chainEffectVerified: true,
+                ...(hadPlatformDisagreement
+                  ? {
+                      platformDisagreement: true,
+                      keeperHubReported: 'failed',
+                      chainConfirmed: 'EXITED',
+                    }
+                  : {}),
+              },
+            });
+          }
+          // Succeeded receipt onchain but wrong/unexpected economic effect (CASE B).
+          return await this.store.transition(intent.operationKey, workerId, 'DISPUTED', {
+            reconciliation: {
+              ...(intent.reconciliation ?? {}),
+              ...result.detail,
+              chainEffectVerified: false,
             },
-          );
+            lastError: 'CHAIN_EFFECT_MISMATCH',
+            detail: {
+              chainEffectVerified: false,
+              reconciliation: result.detail,
+              ...(hadPlatformDisagreement
+                ? { keeperHubReported: 'failed' }
+                : {}),
+            },
+          });
         }
 
         return intent;

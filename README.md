@@ -10,7 +10,8 @@ bounded exit, while `VetoExitGuard` independently rechecks the owner's authoriza
 Morpho condition onchain before any shares can move.
 
 **Judge's one-minute path:** [KeeperHub integration map](docs/KEEPERHUB-INTEGRATION.md) →
-[conditional execution proof](evidence/day-8/keeperhub-conditional-execution.md). The current
+[conditional execution proof](evidence/day-8/keeperhub-conditional-execution.md) →
+[lifecycle safety architecture](docs/LIFECYCLE-SAFETY.md). The current
 primary financial path is:
 
 ```text

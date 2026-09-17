@@ -4,6 +4,7 @@ import {
   getAddress,
   keccak256,
   parseEventLogs,
+  parseAbiItem,
   type Chain,
   type PublicClient,
   type Transport,
@@ -46,11 +47,60 @@ export function createChainReconciler<
 >(client: PublicClient<TTransport, TChain>) {
   return async (
     intent: StoredExitIntent,
-    transactionHash: `0x${string}`,
+    transactionHash?: `0x${string}`,
   ): Promise<ReconciliationResult> => {
-    const receipt = await client.getTransactionReceipt({ hash: transactionHash });
+    if (!transactionHash) {
+      // A consumed mandate may also mean cancellation/replacement. Only an attributable
+      // Exited event can recover a missing hash; absence is never proof of no broadcast.
+      try {
+        const tip = await client.getBlockNumber();
+        const sourceBlock = intent.proposalIdentity.split(':').at(-2);
+        const start =
+          sourceBlock && /^\d+$/.test(sourceBlock)
+            ? BigInt(sourceBlock)
+            : tip > 9_999n
+              ? tip - 9_999n
+              : 0n;
+        for (let fromBlock = start; fromBlock <= tip; fromBlock += 10_000n) {
+          const toBlock = fromBlock + 9_999n < tip ? fromBlock + 9_999n : tip;
+          const logs = await client.getLogs({
+            address: intent.guard,
+            event: parseAbiItem(
+              'event Exited(uint256 indexed mandateId, address indexed owner, address indexed executor, uint256 shares, uint256 assets, bytes32 proposalHash)',
+            ),
+            args: { mandateId: BigInt(intent.mandateId) },
+            fromBlock,
+            toBlock,
+            strict: true,
+          });
+          transactionHash = logs.find(
+            (log) => log.args.proposalHash === keccak256(intent.proposalData),
+          )?.transactionHash;
+          if (transactionHash) break;
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          pending: true,
+          detail: { reason: 'LOG_SEARCH_FAILED', error: error instanceof Error ? error.message : String(error) },
+        };
+      }
+      if (!transactionHash) {
+        return {
+          ok: false,
+          noAttributableEvent: true,
+          detail: { reason: 'NO_ATTRIBUTABLE_EXIT_EVENT' },
+        };
+      }
+    }
+    let receipt;
+    try {
+      receipt = await client.getTransactionReceipt({ hash: transactionHash });
+    } catch {
+      return { ok: false, pending: true, detail: { transactionHash, reason: 'RECEIPT_UNAVAILABLE' } };
+    }
     if (receipt.status !== 'success') {
-      return { ok: false, detail: { receiptStatus: receipt.status } };
+      return { ok: false, reverted: true, detail: { transactionHash, receiptStatus: receipt.status, economicEffect: 'none' } };
     }
     const events = parseEventLogs({ abi: guardAbi, logs: receipt.logs, eventName: 'Exited' });
     const exit = events.find(
