@@ -140,7 +140,7 @@ export class PostgresIntentStore {
       await client.query('BEGIN');
       const selected = await client.query<IntentRow>(
         `SELECT i.* FROM exit_intents i
-         WHERE i.state IN ('READY', 'SIMULATED', 'SUBMITTING', 'PENDING', 'CONFIRMING', 'UNKNOWN', 'RECONCILING', 'DISPUTED')
+         WHERE i.state IN ('READY', 'SIMULATED', 'SUBMITTING', 'PENDING', 'CONFIRMING', 'UNKNOWN', 'RECONCILING')
            AND (i.claimed_at IS NULL OR i.claimed_at < now() - ($1 * interval '1 second'))
            AND NOT EXISTS (
              SELECT 1 FROM exit_intents prior

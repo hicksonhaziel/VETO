@@ -326,7 +326,7 @@ postgresTest(
 );
 
 postgresTest(
-  'Regression 11 (Case E pre-broadcast failure): KeeperHub failed + no tx hash + no log => bounded grace in RECONCILING then BLOCKED without infinite loop',
+  'Regression 11 (Case E pre-broadcast failure): KeeperHub failed + no tx hash + no log => bounded grace in RECONCILING then DISPUTED without infinite loop',
   async (context) => {
     const { store } = await setupStore(context);
     const ready = makeReadyIntent('prop-case-e-nobroadcast', '0x5555');
@@ -376,13 +376,15 @@ postgresTest(
     // Wait for the 20ms grace window to expire
     await new Promise((resolve) => setTimeout(resolve, 30));
 
-    // Second attempt after grace expires
+    // Second attempt after grace expires: transitions to DISPUTED, never BLOCKED/economicEffect:none
     const pass2 = await pipeline.runOnce('w2');
 
-    assert.equal(pass2?.state, 'BLOCKED');
-    assert.equal(pass2?.lastError, 'KEEPERHUB_EXECUTION_FAILED');
-    assert.equal(pass2?.reconciliation?.economicEffect, 'none');
+    assert.equal(pass2?.state, 'DISPUTED');
+    assert.equal(pass2?.lastError, 'BROADCAST_OUTCOME_UNPROVEN');
+    assert.equal(pass2?.reconciliation?.economicEffect, 'unknown');
     assert.equal(pass2?.reconciliation?.transactionHash, null);
+    assert.equal(pass2?.reconciliation?.attributableEventFound, false);
+    assert.equal(pass2?.reconciliation?.automaticRecoveryWindowExpired, true);
     assert(pass2?.reconciliation?.graceExpiredAt);
   },
 );

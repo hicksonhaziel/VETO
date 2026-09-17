@@ -390,10 +390,10 @@ postgresTest(
 
 // -----------------------------------------------------------------------------------------
 // DIRECT RECONCILER TEST 7: no tx hash + no event AFTER durable grace window expires
-// => safe BLOCKED / economicEffect: none
+// => DISPUTED / BROADCAST_OUTCOME_UNPROVEN (not BLOCKED / economicEffect: none)
 // -----------------------------------------------------------------------------------------
 postgresTest(
-  'Direct Reconciler 7: no tx hash + no event AFTER grace window expires => safe BLOCKED / economicEffect: none',
+  'Direct Reconciler 7: no tx hash + no event AFTER grace window expires => DISPUTED / BROADCAST_OUTCOME_UNPROVEN',
   async (context) => {
     const { store } = await setupStore(context);
     const intent = makeTestIntent();
@@ -453,12 +453,88 @@ postgresTest(
 
     const result = await pipeline.runOnce('w2');
 
-    // Grace window elapsed => safely settles to BLOCKED with zero economic effect
-    assert.equal(result?.state, 'BLOCKED');
-    assert.equal(result?.lastError, 'KEEPERHUB_EXECUTION_FAILED');
-    assert.equal(result?.reconciliation?.economicEffect, 'none');
+    // Grace window elapsed + successful scan returned [] => DISPUTED, never economicEffect: none
+    assert.equal(result?.state, 'DISPUTED');
+    assert.equal(result?.lastError, 'BROADCAST_OUTCOME_UNPROVEN');
+    assert.equal(result?.reconciliation?.economicEffect, 'unknown');
     assert.equal(result?.reconciliation?.transactionHash, null);
+    assert.equal(result?.reconciliation?.attributableEventFound, false);
+    assert.equal(result?.reconciliation?.automaticRecoveryWindowExpired, true);
     assert(result?.reconciliation?.graceExpiredAt);
+  },
+);
+
+// -----------------------------------------------------------------------------------------
+// DIRECT RECONCILER TEST 7b: grace expired + getLogs throws
+// => stays RECONCILING, never BLOCKED or DISPUTED
+// -----------------------------------------------------------------------------------------
+postgresTest(
+  'Direct Reconciler 7b: grace expired + getLogs throws => stays RECONCILING, never BLOCKED or DISPUTED',
+  async (context) => {
+    const { store } = await setupStore(context);
+    const intent = makeTestIntent();
+    await store.createReady(intent);
+    await store.claimNext('w1');
+    await store.transition(intent.operationKey, 'w1', 'SIMULATED');
+    await store.transition(intent.operationKey, 'w1', 'SUBMITTING');
+    await store.transition(intent.operationKey, 'w1', 'PENDING', {
+      executionId: 'exec-case-e-rpc-fail',
+    });
+    // Set already-expired grace deadline in durable PostgreSQL state
+    const pastDeadline = new Date(Date.now() - 5_000).toISOString();
+    await store.transition(intent.operationKey, 'w1', 'RECONCILING', {
+      reconciliation: {
+        keeperHubState: 'failed',
+        uncertainBroadcast: true,
+        graceStartedAt: new Date(Date.now() - 65_000).toISOString(),
+        graceDeadline: pastDeadline,
+        reconciliationAttempts: 3,
+      },
+    });
+    await store.release(intent.operationKey, 'w1');
+
+    // RPC client where getLogs throws an error
+    const mockClient = {
+      async getBlockNumber() {
+        return 50_000n;
+      },
+      async getLogs() {
+        throw new Error('RPC_NODE_DISCONNECTED');
+      },
+    } as unknown as PublicClient;
+
+    const mockKeeperHub = {
+      simulateContractCall: async () => ({}),
+      submitContractCall: async () => ({
+        executionId: 'exec-case-e-rpc-fail',
+        state: 'pending' as const,
+        raw: {},
+      }),
+      checkAndExecute: async () => ({
+        executed: true as const,
+        executionId: 'exec-case-e-rpc-fail',
+        state: 'pending' as const,
+        conditionResult: { met: true },
+        raw: {},
+      }),
+      getExecution: async () => ({
+        executionId: 'exec-case-e-rpc-fail',
+        state: 'failed' as const,
+        transactionHash: undefined,
+        raw: { status: 'failed' },
+      }),
+    };
+
+    const reconciler = createChainReconciler(mockClient);
+    const pipeline = new ExitPipeline(store, mockKeeperHub, reconciler);
+
+    const result = await pipeline.runOnce('w2');
+
+    // A FAILED CHAIN QUERY IS NOT A SUCCESSFUL QUERY THAT FOUND ZERO EVENTS.
+    // Must remain in RECONCILING and never settle to BLOCKED or DISPUTED.
+    assert.equal(result?.state, 'RECONCILING');
+    assert.equal(result?.reconciliation?.lastChainCheckFailed, true);
+    assert.equal(result?.reconciliation?.lastChainCheckError, 'LOG_SEARCH_FAILED');
   },
 );
 

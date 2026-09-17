@@ -67,13 +67,13 @@ KeeperHub is a managed execution relayer. **The EVM state is the sole authority 
 
 The reconciliation engine categorizes execution outcomes into five explicit cases:
 
-| Case       | Scenario                                                                                              | Platform Report         | Chain Evidence                            | Final State                                                                                | Economic Effect                                                     |
-| :--------- | :---------------------------------------------------------------------------------------------------- | :---------------------- | :---------------------------------------- | :----------------------------------------------------------------------------------------- | :------------------------------------------------------------------ |
-| **Case A** | Relayer reports failure, but tx mined successfully                                                    | `failed`                | Valid `Exited` receipt & logs             | `EXITED`                                                                                   | Full exit confirmed; platform disagreement flagged                  |
-| **Case B** | Relayer reports completed/failed with tx hash, receipt succeeded, but logs do not match expected exit | `completed` / `failed`  | Succeeded receipt, missing `Exited` event | `DISPUTED`                                                                                 | Flagged for operator intervention; no exit assumed                  |
-| **Case C** | Transaction mined with onchain revert                                                                 | `failed` / `completed`  | Receipt status `reverted` (`0x0`)         | `BLOCKED`                                                                                  | Zero funds moved; mandate remains active; economic effect `none`    |
-| **Case D** | Transaction in flight, receipt not yet available                                                      | `pending` / `completed` | RPC returns receipt not found             | `CONFIRMING`                                                                               | Pipeline yields cleanly; retried on subsequent poll without failure |
-| **Case E** | Relayer reports failure without transaction hash                                                      | `failed` (no hash)      | Log scan: attributable event or no event  | `EXITED` (if event recovered) or bounded `RECONCILING` then `BLOCKED` (after grace window) | Conservative bounded recovery; zero infinite loops                  |
+| Case       | Scenario                                                                                              | Platform Report         | Chain Evidence                                         | Final State                                                                                 | Economic Effect                                                     |
+| :--------- | :---------------------------------------------------------------------------------------------------- | :---------------------- | :----------------------------------------------------- | :------------------------------------------------------------------------------------------ | :------------------------------------------------------------------ |
+| **Case A** | Relayer reports failure, but tx mined successfully                                                    | `failed`                | Valid `Exited` receipt & logs                          | `EXITED`                                                                                    | Full exit confirmed; platform disagreement flagged                  |
+| **Case B** | Relayer reports completed/failed with tx hash, receipt succeeded, but logs do not match expected exit | `completed` / `failed`  | Succeeded receipt, missing `Exited` event              | `DISPUTED`                                                                                  | Flagged for operator intervention; no exit assumed                  |
+| **Case C** | Transaction mined with onchain revert                                                                 | `failed` / `completed`  | Receipt status `reverted` (`0x0`)                      | `BLOCKED`                                                                                   | Zero funds moved; mandate remains active; economic effect `none`    |
+| **Case D** | Transaction in flight, receipt not yet available                                                      | `pending` / `completed` | RPC returns receipt not found                          | `CONFIRMING`                                                                                | Pipeline yields cleanly; retried on subsequent poll without failure |
+| **Case E** | Relayer reports failure without transaction hash                                                      | `failed` (no hash)      | Log scan: attributable event, no event, or RPC failure | `EXITED` (if event recovered) or bounded `RECONCILING` then `DISPUTED` (after grace window) | Bounded automatic recovery; transitions to DISPUTED if unproven     |
 
 ### Conservative Bounded Reconciliation (Case E)
 
@@ -86,7 +86,19 @@ Now, VETO implements conservative bounded reconciliation:
 3. If no attributable log is found on first observation, VETO **does not** prematurely assume no broadcast occurred. Instead, it transitions to `RECONCILING` and persists durable recovery metadata in PostgreSQL (`graceStartedAt`, `graceDeadline`, default 60s).
 4. While in `RECONCILING`, the mandate remains strictly protected from subsequent financial operations via the `NOT EXISTS` queue serialization constraint.
 5. On subsequent scheduled runs, the worker re-checks KeeperHub and onchain logs.
-6. Only after the durable grace window has conclusively expired without any attributable event or hash does the attempt settle to `BLOCKED` with `lastError: 'KEEPERHUB_EXECUTION_FAILED'` and `reconciliation: { economicEffect: 'none', transactionHash: null }`.
+6. **Failed Chain Queries vs. Successful Empty Scans:** A failed RPC lookup (e.g., `getBlockNumber` fails, `getLogs` throws, receipt lookup temporarily unavailable) is NOT a successful scan that found zero events. When a chain query fails, the operation remains in `RECONCILING` with error evidence preserved and yields the tick; it is NEVER treated as evidence that no event occurred.
+7. **Grace Window Expiry:** Because KeeperHub's API contract does not guarantee that `failed + null transactionHash` means no broadcast occurred, absence of a mined event after the grace window cannot prove zero economic effect. After the bounded grace window expires with a successful empty log scan and no hash, VETO transitions to `DISPUTED` with `lastError: 'BROADCAST_OUTCOME_UNPROVEN'` and `reconciliation: { economicEffect: 'unknown', transactionHash: null, automaticRecoveryWindowExpired: true }`.
+8. **Lifecycle States Semantics:**
+   - `RECONCILING`: Automatic recovery is still active.
+   - `DISPUTED`: Automatic recovery is exhausted, but the economic outcome cannot safely be proven onchain.
+
+### Operator Quarantine of DISPUTED State
+
+`DISPUTED` represents an unresolvable outcome that requires operator intervention:
+
+- Normal `claimNext()` does NOT automatically claim `DISPUTED` intents, preventing auto-churning between `DISPUTED` and other states.
+- `DISPUTED` remains an unresolved economic attempt (`state NOT IN ('BLOCKED', 'CANCELLED', 'EXPIRED', 'NOT_APPLICABLE')`), mathematically ensuring subsequent attempts under the same mandate remain blocked until operator resolution.
+- The web console query prioritizes `DISPUTED` above all other attempts so that operators immediately see disputed mandates.
 
 ### Anti-Busy-Loop Tick Control
 

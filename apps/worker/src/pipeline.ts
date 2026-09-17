@@ -161,6 +161,29 @@ export class ExitPipeline {
             continue;
           }
 
+          if (recovered.pending) {
+            // A failed chain query is NOT a successful query that found zero events.
+            // Even if grace expired, remain in RECONCILING, preserve error evidence, yield current tick.
+            const attempts =
+              typeof intent.reconciliation?.reconciliationAttempts === 'number'
+                ? (intent.reconciliation.reconciliationAttempts as number) + 1
+                : 2;
+            return await this.store.transition(intent.operationKey, workerId, 'RECONCILING', {
+              reconciliation: {
+                ...(intent.reconciliation ?? {}),
+                reconciliationAttempts: attempts,
+                lastChainCheckFailed: true,
+                lastChainCheckError: recovered.detail?.reason ?? 'CHAIN_QUERY_PENDING',
+                lastCheckedAt: new Date().toISOString(),
+              },
+              detail: {
+                stage: 'reconciliation_chain_query_pending',
+                reason: recovered.detail?.reason ?? 'CHAIN_QUERY_PENDING',
+                error: recovered.detail?.error,
+              },
+            });
+          }
+
           // 2. Check if KeeperHub execution has updated with a transaction hash.
           const execution = await this.keeperHub.getExecution(intent.executionId);
           const hash = execution.transactionHash ?? intent.transactionHash;
@@ -208,27 +231,35 @@ export class ExitPipeline {
             });
           }
 
-          // Conclusive pre-broadcast failure: grace window has elapsed with zero attributable onchain movement.
-          return await this.store.transition(intent.operationKey, workerId, 'BLOCKED', {
-            lastError: 'KEEPERHUB_EXECUTION_FAILED',
+          // Automatic recovery window expired without an attributable event or hash.
+          // Because KeeperHub failed + null hash does NOT normatively guarantee no broadcast,
+          // we must NOT assume economicEffect: none or BLOCKED.
+          // We transition to DISPUTED to quarantine the operation for operator review.
+          return await this.store.transition(intent.operationKey, workerId, 'DISPUTED', {
+            lastError: 'BROADCAST_OUTCOME_UNPROVEN',
             reconciliation: {
               ...(intent.reconciliation ?? {}),
-              economicEffect: 'none',
+              uncertainBroadcast: true,
+              keeperHubReported: execution.state ?? 'failed',
               transactionHash: null,
+              attributableEventFound: false,
+              automaticRecoveryWindowExpired: true,
+              economicEffect: 'unknown',
               graceExpiredAt: new Date(now).toISOString(),
             },
             detail: {
-              stage: 'keeperhub_execution',
+              stage: 'reconciliation_grace_expired',
               keeperHubState: execution.state,
-              broadcast: false,
-              economicEffect: 'none',
+              broadcast: 'unknown',
+              economicEffect: 'unknown',
               noAttributableEvent: true,
               graceWindowElapsed: true,
+              reason: 'BROADCAST_OUTCOME_UNPROVEN',
             },
           });
         }
 
-        if (intent.state === 'UNKNOWN' || intent.state === 'DISPUTED') {
+        if (intent.state === 'UNKNOWN') {
           if (intent.transactionHash) {
             intent = await this.store.transition(intent.operationKey, workerId, 'CONFIRMING');
             continue;
@@ -250,6 +281,12 @@ export class ExitPipeline {
             detail: { sameRequest: true, sameIdempotencyKey: true },
           });
           continue;
+        }
+
+        if (intent.state === 'DISPUTED') {
+          // DISPUTED is an operator-quarantined state.
+          // Automation must not auto-churn, resubmit, or flip back to CONFIRMING/RECONCILING.
+          return intent;
         }
 
         if (intent.state === 'PENDING') {
@@ -291,6 +328,35 @@ export class ExitPipeline {
                 },
               });
               continue;
+            }
+            if (recovered.pending) {
+              // A failed chain query is NOT a successful query that found zero events.
+              if (execution.state === 'failed') {
+                const graceMs = this.options?.reconciliationGraceMs ?? 60_000;
+                const now = Date.now();
+                const deadline = intent.reconciliation?.graceDeadline
+                  ? (intent.reconciliation?.graceDeadline as string)
+                  : new Date(now + graceMs).toISOString();
+                return await this.store.transition(intent.operationKey, workerId, 'RECONCILING', {
+                  reconciliation: {
+                    ...(intent.reconciliation ?? {}),
+                    keeperHubState: 'failed',
+                    uncertainBroadcast: true,
+                    graceStartedAt:
+                      intent.reconciliation?.graceStartedAt ?? new Date(now).toISOString(),
+                    graceDeadline: deadline,
+                    lastChainCheckFailed: true,
+                    lastChainCheckError: recovered.detail?.reason ?? 'CHAIN_QUERY_PENDING',
+                    lastCheckedAt: new Date(now).toISOString(),
+                  },
+                  detail: {
+                    stage: 'reconciliation_chain_query_pending',
+                    reason: recovered.detail?.reason ?? 'CHAIN_QUERY_PENDING',
+                    error: recovered.detail?.error,
+                  },
+                });
+              }
+              return intent;
             }
             if (execution.state === 'failed') {
               const graceMs = this.options?.reconciliationGraceMs ?? 60_000;
@@ -334,22 +400,27 @@ export class ExitPipeline {
                 });
               }
 
-              // Conclusive pre-broadcast failure: grace window has elapsed with zero attributable onchain movement.
-              return await this.store.transition(intent.operationKey, workerId, 'BLOCKED', {
-                lastError: 'KEEPERHUB_EXECUTION_FAILED',
+              // Automatic recovery window expired without an attributable event or hash.
+              return await this.store.transition(intent.operationKey, workerId, 'DISPUTED', {
+                lastError: 'BROADCAST_OUTCOME_UNPROVEN',
                 reconciliation: {
                   ...(intent.reconciliation ?? {}),
-                  economicEffect: 'none',
+                  uncertainBroadcast: true,
+                  keeperHubReported: execution.state ?? 'failed',
                   transactionHash: null,
+                  attributableEventFound: false,
+                  automaticRecoveryWindowExpired: true,
+                  economicEffect: 'unknown',
                   graceExpiredAt: new Date(now).toISOString(),
                 },
                 detail: {
-                  stage: 'keeperhub_execution',
+                  stage: 'reconciliation_grace_expired',
                   keeperHubState: execution.state,
-                  broadcast: false,
-                  economicEffect: 'none',
+                  broadcast: 'unknown',
+                  economicEffect: 'unknown',
                   noAttributableEvent: true,
                   graceWindowElapsed: true,
+                  reason: 'BROADCAST_OUTCOME_UNPROVEN',
                 },
               });
             }

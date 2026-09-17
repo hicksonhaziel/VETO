@@ -38,10 +38,23 @@ export async function GET(request: NextRequest) {
          SELECT i.state, i.execution_id, i.transaction_hash
          FROM exit_intents i
          WHERE i.chain_id = r.chain_id
-           AND i.guard_address = r.guard_address
-           AND i.mandate_id = r.mandate_id
-         ORDER BY (CASE WHEN i.state = 'EXITED' THEN 0 ELSE 1 END), i.created_at DESC
-         LIMIT 1
+            AND i.guard_address = r.guard_address
+            AND i.mandate_id = r.mandate_id
+          ORDER BY (
+            CASE
+              WHEN i.state = 'DISPUTED' THEN 0
+              WHEN i.state = 'EXITED' THEN 1
+              WHEN i.state = 'UNKNOWN' THEN 2
+              WHEN i.state = 'RECONCILING' THEN 3
+              WHEN i.state = 'CONFIRMING' THEN 4
+              WHEN i.state = 'PENDING' THEN 5
+              WHEN i.state = 'SUBMITTING' THEN 6
+              WHEN i.state = 'SIMULATED' THEN 7
+              WHEN i.state = 'READY' THEN 8
+              ELSE 9
+            END
+          ), i.created_at DESC
+          LIMIT 1
        ) latest_intent ON true
        WHERE r.owner_address = $1
        ORDER BY r.created_at DESC`,
