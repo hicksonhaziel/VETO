@@ -1,11 +1,16 @@
 import { financialOperationKey, type ReadyExitIntent } from '@veto/core';
 import { keeperHubIdempotencyKey } from '@veto/keeperhub';
-import type { ManagementFeeAssessment, PerformanceFeeAssessment } from '@veto/morpho-v2';
+import type {
+  ManagementFeeAssessment,
+  PerformanceFeeAssessment,
+  RelativeCapAssessment,
+} from '@veto/morpho-v2';
 import type { Address, Hex } from 'viem';
 
 export type ProposalAssessment =
   | ManagementFeeAssessment
   | PerformanceFeeAssessment
+  | RelativeCapAssessment
   | {
       eligible: boolean;
       reason: string;

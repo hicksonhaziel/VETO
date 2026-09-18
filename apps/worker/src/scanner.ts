@@ -1,11 +1,14 @@
 import { financialOperationKey } from '@veto/core';
 import {
+  decodeIncreaseRelativeCap,
+  increaseRelativeCapSelector,
   proposalIdentity,
   scanVaultProposals,
   setManagementFeeSelector,
   setPerformanceFeeSelector,
   verifyManagementFeeProposal,
   verifyPerformanceFeeProposal,
+  verifyRelativeCapProposal,
 } from '@veto/morpho-v2';
 import { getAddress, type Address, type Chain, type PublicClient, type Transport } from 'viem';
 
@@ -49,6 +52,26 @@ const guardV2ReadAbi = [
       { name: 'maxManagementFee', type: 'uint256' },
       { name: 'maxPerformanceFee', type: 'uint256' },
     ],
+  },
+  {
+    type: 'function',
+    name: 'hasRelativeCapByMandateRisk',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'mandateId', type: 'uint256' },
+      { name: 'riskId', type: 'bytes32' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'maxRelativeCapByMandateRisk',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'mandateId', type: 'uint256' },
+      { name: 'riskId', type: 'bytes32' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
   },
 ] as const;
 
@@ -220,6 +243,45 @@ export async function scanConfiguredMandate<
           policyEnabled: (policyFlags & 2n) !== 0n,
           blockNumber: toBlock,
         });
+      } else if (proposal.selector.toLowerCase() === increaseRelativeCapSelector.toLowerCase()) {
+        const decoded = decodeIncreaseRelativeCap(proposal.data);
+        if (!decoded) {
+          decision = 'unsupported-proposal';
+          assessment = { status: proposal.status, selector: proposal.selector };
+        } else {
+          let hasRisk = false;
+          let maxCap = 0n;
+          if (config.guardVersion === 'v2') {
+            [hasRisk, maxCap] = await Promise.all([
+              client.readContract({
+                address: config.guard,
+                abi: guardV2ReadAbi,
+                functionName: 'hasRelativeCapByMandateRisk',
+                args: [config.mandateId, decoded.riskId],
+                blockNumber: toBlock,
+              }),
+              client.readContract({
+                address: config.guard,
+                abi: guardV2ReadAbi,
+                functionName: 'maxRelativeCapByMandateRisk',
+                args: [config.mandateId, decoded.riskId],
+                blockNumber: toBlock,
+              }),
+            ]);
+          }
+          verified = await verifyRelativeCapProposal({
+            client,
+            factory: config.factory,
+            vault: config.vault,
+            data: proposal.data,
+            hasRiskConfig: hasRisk,
+            maxRelativeCapWad: maxCap,
+            safetySeconds: mandateSafetySeconds,
+            expectedExecutableAt: proposal.executableAt,
+            policyEnabled: (policyFlags & 4n) !== 0n,
+            blockNumber: toBlock,
+          });
+        }
       } else {
         decision = 'unsupported-proposal';
         assessment = { status: proposal.status, selector: proposal.selector };

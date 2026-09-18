@@ -45,6 +45,8 @@ contract FixtureAsset {
 contract ControlledVaultV2Fixture {
     bytes4 public constant SET_MANAGEMENT_FEE_SELECTOR = bytes4(keccak256("setManagementFee(uint256)"));
     bytes4 public constant SET_PERFORMANCE_FEE_SELECTOR = 0x70897b23;
+    bytes4 public constant INCREASE_RELATIVE_CAP_SELECTOR = 0x2438525b;
+    bytes4 public constant DECREASE_RELATIVE_CAP_SELECTOR = 0x57975270;
 
     FixtureAsset public immutable asset;
     address public immutable curator;
@@ -57,6 +59,8 @@ contract ControlledVaultV2Fixture {
     mapping(address account => uint256) public balanceOf;
     mapping(address owner => mapping(address spender => uint256)) public allowance;
     mapping(bytes32 proposalHash => uint256) private proposalExecutableAt;
+    mapping(bytes32 id => uint256) public relativeCap;
+    mapping(bytes4 selector => bool) public isAbdicated;
 
     event Submit(bytes4 indexed selector, bytes data, uint256 executableAt);
     event Revoke(address indexed sender, bytes4 indexed selector, bytes data);
@@ -79,8 +83,13 @@ contract ControlledVaultV2Fixture {
         managementFeeTimelock = timelock_;
     }
 
-    function abdicated(bytes4) external pure returns (bool) {
-        return false;
+    function abdicate(bytes4 selector) external {
+        require(msg.sender == curator, "not curator");
+        isAbdicated[selector] = true;
+    }
+
+    function abdicated(bytes4 selector) external view returns (bool) {
+        return isAbdicated[selector];
     }
 
     function executableAt(bytes calldata data) external view returns (uint256) {
@@ -91,7 +100,8 @@ contract ControlledVaultV2Fixture {
         require(msg.sender == curator, "not curator");
         bytes4 selector = bytes4(data);
         bool supported = (selector == SET_MANAGEMENT_FEE_SELECTOR && data.length == 36)
-            || (selector == SET_PERFORMANCE_FEE_SELECTOR && data.length == 36);
+            || (selector == SET_PERFORMANCE_FEE_SELECTOR && data.length == 36)
+            || (selector == INCREASE_RELATIVE_CAP_SELECTOR && data.length >= 100);
         require(supported, "unsupported");
         bytes32 proposalHash = keccak256(data);
         require(proposalExecutableAt[proposalHash] == 0, "already pending");
@@ -126,6 +136,27 @@ contract ControlledVaultV2Fixture {
         proposalExecutableAt[proposalHash] = 0;
         performanceFee = newPerformanceFee;
         emit Accept(SET_PERFORMANCE_FEE_SELECTOR, data);
+    }
+
+    function increaseRelativeCap(bytes memory idData, uint256 newRelativeCap) external {
+        bytes memory data = abi.encodeCall(this.increaseRelativeCap, (idData, newRelativeCap));
+        bytes32 proposalHash = keccak256(data);
+        uint256 when = proposalExecutableAt[proposalHash];
+        require(when != 0 && block.timestamp >= when, "not executable");
+        proposalExecutableAt[proposalHash] = 0;
+        bytes32 id = keccak256(idData);
+        relativeCap[id] = newRelativeCap;
+        emit Accept(INCREASE_RELATIVE_CAP_SELECTOR, data);
+    }
+
+    function decreaseRelativeCap(bytes memory idData, uint256 newRelativeCap) external {
+        require(msg.sender == curator, "not curator");
+        bytes32 id = keccak256(idData);
+        relativeCap[id] = newRelativeCap;
+        emit Accept(
+            DECREASE_RELATIVE_CAP_SELECTOR,
+            abi.encodeCall(this.decreaseRelativeCap, (idData, newRelativeCap))
+        );
     }
 
     function approve(address spender, uint256 shares) external returns (bool) {

@@ -1,5 +1,6 @@
 import {
   decodeFunctionData,
+  keccak256,
   parseAbiItem,
   size,
   toFunctionSelector,
@@ -48,8 +49,23 @@ const setPerformanceFeeAbi = [
   },
 ] as const;
 
+const increaseRelativeCapAbi = [
+  {
+    type: 'function',
+    name: 'increaseRelativeCap',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'idData', type: 'bytes' },
+      { name: 'newRelativeCap', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const;
+
 export const setManagementFeeSelector = toFunctionSelector('setManagementFee(uint256)');
 export const setPerformanceFeeSelector = toFunctionSelector('setPerformanceFee(uint256)');
+export const increaseRelativeCapSelector = toFunctionSelector('increaseRelativeCap(bytes,uint256)');
+export const decreaseRelativeCapSelector = toFunctionSelector('decreaseRelativeCap(bytes,uint256)');
 
 export type ProposalType =
   | 'management-fee'
@@ -87,6 +103,10 @@ export type VaultProposal = {
   data: Hex;
   proposalType?: ProposalType;
   proposedFee?: bigint;
+  riskId?: Hex;
+  newRelativeCap?: bigint;
+  adapter?: Address;
+  gate?: Address;
   executableAt: bigint;
   submittedAtBlock: bigint;
   submitTransactionHash: Hex;
@@ -122,6 +142,34 @@ export function decodePerformanceFee(data: Hex): bigint | undefined {
   try {
     const decoded = decodeFunctionData({ abi: setPerformanceFeeAbi, data });
     return decoded.functionName === 'setPerformanceFee' ? decoded.args[0] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function decodeIncreaseRelativeCap(
+  data: Hex,
+): { idData: Hex; riskId: Hex; newRelativeCap: bigint } | undefined {
+  if (
+    size(data) < 100 ||
+    data.slice(0, 10).toLowerCase() !== increaseRelativeCapSelector.toLowerCase()
+  ) {
+    return undefined;
+  }
+
+  try {
+    const decoded = decodeFunctionData({ abi: increaseRelativeCapAbi, data });
+    if (decoded.functionName !== 'increaseRelativeCap') return undefined;
+    const [idData, newRelativeCap] = decoded.args;
+    const idBytes = size(idData);
+    const expectedSize = 100 + Math.ceil(idBytes / 32) * 32;
+    if (size(data) !== expectedSize) return undefined;
+
+    return {
+      idData,
+      riskId: keccak256(idData),
+      newRelativeCap,
+    };
   } catch {
     return undefined;
   }
@@ -239,7 +287,16 @@ export async function scanManagementFeeProposals<
 export function identifyProposal(
   selector: Hex,
   data: Hex,
-): { proposalType: ProposalType; proposedFee?: bigint } | undefined {
+):
+  | {
+      proposalType: ProposalType;
+      proposedFee?: bigint;
+      riskId?: Hex;
+      newRelativeCap?: bigint;
+      adapter?: Address;
+      gate?: Address;
+    }
+  | undefined {
   const sel = selector.toLowerCase();
   if (sel === setManagementFeeSelector.toLowerCase()) {
     const fee = decodeManagementFee(data);
@@ -248,6 +305,16 @@ export function identifyProposal(
   if (sel === setPerformanceFeeSelector.toLowerCase()) {
     const fee = decodePerformanceFee(data);
     return fee !== undefined ? { proposalType: 'performance-fee', proposedFee: fee } : undefined;
+  }
+  if (sel === increaseRelativeCapSelector.toLowerCase()) {
+    const decoded = decodeIncreaseRelativeCap(data);
+    return decoded !== undefined
+      ? {
+          proposalType: 'relative-cap',
+          riskId: decoded.riskId,
+          newRelativeCap: decoded.newRelativeCap,
+        }
+      : undefined;
   }
   return undefined;
 }
@@ -275,6 +342,10 @@ export function reduceVaultProposalLogs(
         data: log.data,
         proposalType: identified.proposalType,
         proposedFee: identified.proposedFee,
+        riskId: identified.riskId,
+        newRelativeCap: identified.newRelativeCap,
+        adapter: identified.adapter,
+        gate: identified.gate,
         executableAt: log.executableAt,
         submittedAtBlock: log.blockNumber,
         submitTransactionHash: log.transactionHash,

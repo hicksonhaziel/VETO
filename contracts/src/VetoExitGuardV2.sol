@@ -143,6 +143,7 @@ contract VetoExitGuardV2 {
             if (config.maxPerformanceFee >= MAX_PERFORMANCE_FEE) revert InvalidMandate();
         }
         if ((config.policyFlags & POLICY_RELATIVE_CAP) != 0) {
+            if (config.relativeCaps.length == 0) revert InvalidMandate();
             for (uint256 i = 0; i < config.relativeCaps.length; i++) {
                 if (config.relativeCaps[i].maxRelativeCap > WAD) revert InvalidMandate();
             }
@@ -250,6 +251,22 @@ contract VetoExitGuardV2 {
                 revert FeeDoesNotBreachLimit();
             }
             if (vault.abdicated(SET_PERFORMANCE_FEE_SELECTOR) || vault.performanceFeeRecipient() == address(0)) {
+                revert ProposalIsNotExecutable();
+            }
+        } else if (selector == INCREASE_RELATIVE_CAP_SELECTOR) {
+            if ((mandate.policyFlags & POLICY_RELATIVE_CAP) == 0) revert PolicyDisabled();
+            if (proposal.length < 100) revert UnsupportedProposal();
+            uint256 idOffset = uint256(bytes32(proposal[4:36]));
+            if (idOffset != 64) revert UnsupportedProposal();
+            uint256 idLen = uint256(bytes32(proposal[68:100]));
+            if (proposal.length != 100 + ((idLen + 31) / 32) * 32) revert UnsupportedProposal();
+            (bytes memory idData, uint256 newRelativeCap) = abi.decode(proposal[4:], (bytes, uint256));
+            bytes32 riskId = keccak256(idData);
+            if (!hasRelativeCapByMandateRisk[mandateId][riskId]) revert CapDoesNotBreachLimit();
+            if (newRelativeCap <= maxRelativeCapByMandateRisk[mandateId][riskId] || newRelativeCap > WAD) {
+                revert CapDoesNotBreachLimit();
+            }
+            if (vault.abdicated(INCREASE_RELATIVE_CAP_SELECTOR)) {
                 revert ProposalIsNotExecutable();
             }
         } else {

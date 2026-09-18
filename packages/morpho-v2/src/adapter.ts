@@ -9,8 +9,10 @@ import {
 } from 'viem';
 
 import {
+  decodeIncreaseRelativeCap,
   decodeManagementFee,
   decodePerformanceFee,
+  increaseRelativeCapSelector,
   setManagementFeeSelector,
   setPerformanceFeeSelector,
   type ManagementFeeProposal,
@@ -19,6 +21,7 @@ import {
 
 export const maxManagementFeePerSecond = 50_000_000_000_000_000n / 31_536_000n;
 export const maxPerformanceFeeWadProtocol = 500_000_000_000_000_000n; // 0.5e18 = 50%
+export const maxRelativeCapWadProtocol = 1_000_000_000_000_000_000n; // 1.0e18 = 100% WAD
 
 const factoryReadAbi = [
   {
@@ -389,6 +392,178 @@ export async function verifyPerformanceFeeProposal<
       factoryApproved,
       abdicated,
       performanceFeeRecipient: getAddress(performanceFeeRecipient),
+      executableAt,
+      observedAt: block.timestamp,
+    },
+  });
+}
+
+export type RelativeCapAssessmentReason =
+  | 'eligible'
+  | 'unsupported-vault'
+  | 'unsupported-proposal'
+  | 'policy-disabled'
+  | 'risk-not-configured'
+  | 'cap-within-owner-limit'
+  | 'cap-exceeds-protocol-limit'
+  | 'setter-abdicated'
+  | 'proposal-cleared'
+  | 'proposal-changed'
+  | 'exit-window-closed';
+
+export type RelativeCapSnapshot = {
+  factoryApproved: boolean;
+  abdicated: boolean;
+  executableAt: bigint;
+  observedAt: bigint;
+};
+
+export type RelativeCapAssessment = {
+  eligible: boolean;
+  reason: RelativeCapAssessmentReason;
+  proposalHash: Hex;
+  riskId?: Hex;
+  newRelativeCap?: bigint;
+  executableAt?: bigint;
+  remainingSeconds?: bigint;
+};
+
+export function assessRelativeCapProposal(options: {
+  data: Hex;
+  hasRiskConfig: boolean;
+  maxRelativeCapWad: bigint;
+  safetySeconds: bigint;
+  expectedExecutableAt: bigint;
+  snapshot: RelativeCapSnapshot;
+  policyEnabled?: boolean;
+}): RelativeCapAssessment {
+  const {
+    data,
+    hasRiskConfig,
+    maxRelativeCapWad,
+    safetySeconds,
+    expectedExecutableAt,
+    snapshot,
+    policyEnabled = true,
+  } = options;
+  const proposalHash = keccak256(data);
+  const decoded = decodeIncreaseRelativeCap(data);
+  const result = (
+    reason: RelativeCapAssessmentReason,
+    extras: Partial<RelativeCapAssessment> = {},
+  ): RelativeCapAssessment => ({
+    eligible: reason === 'eligible',
+    reason,
+    proposalHash,
+    riskId: decoded?.riskId,
+    newRelativeCap: decoded?.newRelativeCap,
+    executableAt: snapshot.executableAt,
+    ...extras,
+  });
+
+  if (!snapshot.factoryApproved) return result('unsupported-vault');
+  if (decoded === undefined) return result('unsupported-proposal');
+  if (!policyEnabled) return result('policy-disabled');
+  if (!hasRiskConfig) return result('risk-not-configured');
+  if (decoded.newRelativeCap <= maxRelativeCapWad) return result('cap-within-owner-limit');
+  if (decoded.newRelativeCap > maxRelativeCapWadProtocol)
+    return result('cap-exceeds-protocol-limit');
+  if (snapshot.abdicated) return result('setter-abdicated');
+  if (snapshot.executableAt === 0n) return result('proposal-cleared');
+  if (snapshot.executableAt !== expectedExecutableAt) return result('proposal-changed');
+  if (snapshot.executableAt <= snapshot.observedAt) {
+    return result('exit-window-closed', { remainingSeconds: 0n });
+  }
+
+  const remainingSeconds = snapshot.executableAt - snapshot.observedAt;
+  if (remainingSeconds <= safetySeconds) {
+    return result('exit-window-closed', { remainingSeconds });
+  }
+  return result('eligible', { remainingSeconds });
+}
+
+export async function verifyRelativeCapProposal<
+  TTransport extends Transport,
+  TChain extends Chain | undefined,
+>(options: {
+  client: PublicClient<TTransport, TChain>;
+  factory: Address;
+  vault: Address;
+  data: Hex;
+  hasRiskConfig: boolean;
+  maxRelativeCapWad: bigint;
+  safetySeconds: bigint;
+  expectedExecutableAt: bigint;
+  policyEnabled?: boolean;
+  blockNumber?: bigint;
+}): Promise<RelativeCapAssessment> {
+  const {
+    client,
+    factory,
+    vault,
+    data,
+    hasRiskConfig,
+    maxRelativeCapWad,
+    safetySeconds,
+    expectedExecutableAt,
+    policyEnabled = true,
+    blockNumber,
+  } = options;
+  const [factoryApproved, block] = await Promise.all([
+    client.readContract({
+      address: factory,
+      abi: factoryReadAbi,
+      functionName: 'isVaultV2',
+      args: [vault],
+      blockNumber,
+    }),
+    client.getBlock({ blockNumber }),
+  ]);
+
+  if (!factoryApproved) {
+    return assessRelativeCapProposal({
+      data,
+      hasRiskConfig,
+      maxRelativeCapWad,
+      safetySeconds,
+      expectedExecutableAt,
+      policyEnabled,
+      snapshot: {
+        factoryApproved,
+        abdicated: false,
+        executableAt: 0n,
+        observedAt: block.timestamp,
+      },
+    });
+  }
+
+  const [executableAt, abdicated] = await Promise.all([
+    client.readContract({
+      address: vault,
+      abi: vaultVerificationAbi,
+      functionName: 'executableAt',
+      args: [data],
+      blockNumber,
+    }),
+    client.readContract({
+      address: vault,
+      abi: vaultVerificationAbi,
+      functionName: 'abdicated',
+      args: [increaseRelativeCapSelector],
+      blockNumber,
+    }),
+  ]);
+
+  return assessRelativeCapProposal({
+    data,
+    hasRiskConfig,
+    maxRelativeCapWad,
+    safetySeconds,
+    expectedExecutableAt,
+    policyEnabled,
+    snapshot: {
+      factoryApproved,
+      abdicated,
       executableAt,
       observedAt: block.timestamp,
     },
