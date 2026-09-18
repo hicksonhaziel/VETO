@@ -14,9 +14,13 @@ import {
   decodeIncreaseRelativeCap,
   decodeManagementFee,
   decodePerformanceFee,
+  decodeSetReceiveAssetsGate,
+  decodeSetSendSharesGate,
   increaseRelativeCapSelector,
   setManagementFeeSelector,
   setPerformanceFeeSelector,
+  setReceiveAssetsGateSelector,
+  setSendSharesGateSelector,
   type ManagementFeeProposal,
   type VaultProposal,
 } from './scanner.js';
@@ -717,6 +721,169 @@ export async function verifyAdapterProposal<
   ]);
 
   return assessAdapterProposal({
+    data,
+    isApproved,
+    safetySeconds,
+    expectedExecutableAt,
+    policyEnabled,
+    snapshot: {
+      factoryApproved,
+      abdicated,
+      executableAt,
+      observedAt: block.timestamp,
+    },
+  });
+}
+
+export type GateAssessmentReason =
+  | 'eligible'
+  | 'unsupported-vault'
+  | 'unsupported-proposal'
+  | 'policy-disabled'
+  | 'gate-approved'
+  | 'setter-abdicated'
+  | 'proposal-cleared'
+  | 'proposal-changed'
+  | 'exit-window-closed';
+
+export type GateSnapshot = {
+  factoryApproved: boolean;
+  abdicated: boolean;
+  executableAt: bigint;
+  observedAt: bigint;
+};
+
+export type GateAssessment = {
+  eligible: boolean;
+  reason: GateAssessmentReason;
+  proposalHash: Hex;
+  gate?: Address;
+  executableAt?: bigint;
+  remainingSeconds?: bigint;
+};
+
+export function assessGateProposal(options: {
+  data: Hex;
+  isApproved: boolean;
+  safetySeconds: bigint;
+  expectedExecutableAt: bigint;
+  snapshot: GateSnapshot;
+  policyEnabled?: boolean;
+}): GateAssessment {
+  const {
+    data,
+    isApproved,
+    safetySeconds,
+    expectedExecutableAt,
+    snapshot,
+    policyEnabled = true,
+  } = options;
+  const proposalHash = keccak256(data);
+  const gate = decodeSetSendSharesGate(data) ?? decodeSetReceiveAssetsGate(data);
+  const result = (
+    reason: GateAssessmentReason,
+    extras: Partial<GateAssessment> = {},
+  ): GateAssessment => ({
+    eligible: reason === 'eligible',
+    reason,
+    proposalHash,
+    gate,
+    executableAt: snapshot.executableAt,
+    ...extras,
+  });
+
+  if (!snapshot.factoryApproved) return result('unsupported-vault');
+  if (gate === undefined) return result('unsupported-proposal');
+  if (!policyEnabled) return result('policy-disabled');
+  if (gate === '0x0000000000000000000000000000000000000000' || isApproved) {
+    return result('gate-approved');
+  }
+  if (snapshot.abdicated) return result('setter-abdicated');
+  if (snapshot.executableAt === 0n) return result('proposal-cleared');
+  if (snapshot.executableAt !== expectedExecutableAt) return result('proposal-changed');
+  if (snapshot.executableAt <= snapshot.observedAt) {
+    return result('exit-window-closed', { remainingSeconds: 0n });
+  }
+
+  const remainingSeconds = snapshot.executableAt - snapshot.observedAt;
+  if (remainingSeconds <= safetySeconds) {
+    return result('exit-window-closed', { remainingSeconds });
+  }
+  return result('eligible', { remainingSeconds });
+}
+
+export async function verifyGateProposal<
+  TTransport extends Transport,
+  TChain extends Chain | undefined,
+>(options: {
+  client: PublicClient<TTransport, TChain>;
+  factory: Address;
+  vault: Address;
+  selector: Hex;
+  data: Hex;
+  isApproved: boolean;
+  safetySeconds: bigint;
+  expectedExecutableAt: bigint;
+  policyEnabled?: boolean;
+  blockNumber?: bigint;
+}): Promise<GateAssessment> {
+  const {
+    client,
+    factory,
+    vault,
+    selector,
+    data,
+    isApproved,
+    safetySeconds,
+    expectedExecutableAt,
+    policyEnabled = true,
+    blockNumber,
+  } = options;
+  const [factoryApproved, block] = await Promise.all([
+    client.readContract({
+      address: factory,
+      abi: factoryReadAbi,
+      functionName: 'isVaultV2',
+      args: [vault],
+      blockNumber,
+    }),
+    client.getBlock({ blockNumber }),
+  ]);
+
+  if (!factoryApproved) {
+    return assessGateProposal({
+      data,
+      isApproved,
+      safetySeconds,
+      expectedExecutableAt,
+      policyEnabled,
+      snapshot: {
+        factoryApproved,
+        abdicated: false,
+        executableAt: 0n,
+        observedAt: block.timestamp,
+      },
+    });
+  }
+
+  const [executableAt, abdicated] = await Promise.all([
+    client.readContract({
+      address: vault,
+      abi: vaultVerificationAbi,
+      functionName: 'executableAt',
+      args: [data],
+      blockNumber,
+    }),
+    client.readContract({
+      address: vault,
+      abi: vaultVerificationAbi,
+      functionName: 'abdicated',
+      args: [selector as `0x${string}`],
+      blockNumber,
+    }),
+  ]);
+
+  return assessGateProposal({
     data,
     isApproved,
     safetySeconds,

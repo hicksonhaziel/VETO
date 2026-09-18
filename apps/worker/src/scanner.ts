@@ -3,12 +3,17 @@ import {
   addAdapterSelector,
   decodeAddAdapter,
   decodeIncreaseRelativeCap,
+  decodeSetReceiveAssetsGate,
+  decodeSetSendSharesGate,
   increaseRelativeCapSelector,
   proposalIdentity,
   scanVaultProposals,
   setManagementFeeSelector,
   setPerformanceFeeSelector,
+  setReceiveAssetsGateSelector,
+  setSendSharesGateSelector,
   verifyAdapterProposal,
+  verifyGateProposal,
   verifyManagementFeeProposal,
   verifyPerformanceFeeProposal,
   verifyRelativeCapProposal,
@@ -83,6 +88,26 @@ const guardV2ReadAbi = [
     inputs: [
       { name: 'mandateId', type: 'uint256' },
       { name: 'adapter', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'approvedSendSharesGateByMandate',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'mandateId', type: 'uint256' },
+      { name: 'gate', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'approvedReceiveAssetsGateByMandate',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'mandateId', type: 'uint256' },
+      { name: 'gate', type: 'address' },
     ],
     outputs: [{ name: '', type: 'bool' }],
   },
@@ -320,6 +345,64 @@ export async function scanConfiguredMandate<
             safetySeconds: mandateSafetySeconds,
             expectedExecutableAt: proposal.executableAt,
             policyEnabled: (policyFlags & 8n) !== 0n,
+            blockNumber: toBlock,
+          });
+        }
+      } else if (proposal.selector.toLowerCase() === setSendSharesGateSelector.toLowerCase()) {
+        const decoded = decodeSetSendSharesGate(proposal.data);
+        if (!decoded) {
+          decision = 'unsupported-proposal';
+          assessment = { status: proposal.status, selector: proposal.selector };
+        } else {
+          let isApproved = false;
+          if (config.guardVersion === 'v2') {
+            isApproved = await client.readContract({
+              address: config.guard,
+              abi: guardV2ReadAbi,
+              functionName: 'approvedSendSharesGateByMandate',
+              args: [config.mandateId, decoded],
+              blockNumber: toBlock,
+            });
+          }
+          verified = await verifyGateProposal({
+            client,
+            factory: config.factory,
+            vault: config.vault,
+            selector: proposal.selector,
+            data: proposal.data,
+            isApproved,
+            safetySeconds: mandateSafetySeconds,
+            expectedExecutableAt: proposal.executableAt,
+            policyEnabled: (policyFlags & 16n) !== 0n,
+            blockNumber: toBlock,
+          });
+        }
+      } else if (proposal.selector.toLowerCase() === setReceiveAssetsGateSelector.toLowerCase()) {
+        const decoded = decodeSetReceiveAssetsGate(proposal.data);
+        if (!decoded) {
+          decision = 'unsupported-proposal';
+          assessment = { status: proposal.status, selector: proposal.selector };
+        } else {
+          let isApproved = false;
+          if (config.guardVersion === 'v2') {
+            isApproved = await client.readContract({
+              address: config.guard,
+              abi: guardV2ReadAbi,
+              functionName: 'approvedReceiveAssetsGateByMandate',
+              args: [config.mandateId, decoded],
+              blockNumber: toBlock,
+            });
+          }
+          verified = await verifyGateProposal({
+            client,
+            factory: config.factory,
+            vault: config.vault,
+            selector: proposal.selector,
+            data: proposal.data,
+            isApproved,
+            safetySeconds: mandateSafetySeconds,
+            expectedExecutableAt: proposal.executableAt,
+            policyEnabled: (policyFlags & 16n) !== 0n,
             blockNumber: toBlock,
           });
         }

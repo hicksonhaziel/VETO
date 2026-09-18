@@ -185,9 +185,11 @@ contract VetoExitGuardV2 {
         }
         if ((config.policyFlags & POLICY_REDEMPTION_GATE_ALLOWLIST) != 0) {
             for (uint256 i = 0; i < config.approvedSendSharesGates.length; i++) {
+                if (config.approvedSendSharesGates[i] == address(0)) revert InvalidMandate();
                 approvedSendSharesGateByMandate[mandateId][config.approvedSendSharesGates[i]] = true;
             }
             for (uint256 i = 0; i < config.approvedReceiveAssetsGates.length; i++) {
+                if (config.approvedReceiveAssetsGates[i] == address(0)) revert InvalidMandate();
                 approvedReceiveAssetsGateByMandate[mandateId][config.approvedReceiveAssetsGates[i]] = true;
             }
         }
@@ -279,6 +281,26 @@ contract VetoExitGuardV2 {
                 revert AdapterIsApproved();
             }
             if (vault.abdicated(ADD_ADAPTER_SELECTOR)) {
+                revert ProposalIsNotExecutable();
+            }
+        } else if (selector == SET_SEND_SHARES_GATE_SELECTOR) {
+            if ((mandate.policyFlags & POLICY_REDEMPTION_GATE_ALLOWLIST) == 0) revert PolicyDisabled();
+            if (proposal.length != 36) revert UnsupportedProposal();
+            address proposedGate = abi.decode(proposal[4:], (address));
+            if (proposedGate == address(0) || approvedSendSharesGateByMandate[mandateId][proposedGate]) {
+                revert GateIsApproved();
+            }
+            if (vault.abdicated(SET_SEND_SHARES_GATE_SELECTOR)) {
+                revert ProposalIsNotExecutable();
+            }
+        } else if (selector == SET_RECEIVE_ASSETS_GATE_SELECTOR) {
+            if ((mandate.policyFlags & POLICY_REDEMPTION_GATE_ALLOWLIST) == 0) revert PolicyDisabled();
+            if (proposal.length != 36) revert UnsupportedProposal();
+            address proposedGate = abi.decode(proposal[4:], (address));
+            if (proposedGate == address(0) || approvedReceiveAssetsGateByMandate[mandateId][proposedGate]) {
+                revert GateIsApproved();
+            }
+            if (vault.abdicated(SET_RECEIVE_ASSETS_GATE_SELECTOR)) {
                 revert ProposalIsNotExecutable();
             }
         } else {

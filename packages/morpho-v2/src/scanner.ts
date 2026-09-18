@@ -73,11 +73,33 @@ const addAdapterAbi = [
   },
 ] as const;
 
+const setSendSharesGateAbi = [
+  {
+    type: 'function',
+    name: 'setSendSharesGate',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newGate', type: 'address' }],
+    outputs: [],
+  },
+] as const;
+
+const setReceiveAssetsGateAbi = [
+  {
+    type: 'function',
+    name: 'setReceiveAssetsGate',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newGate', type: 'address' }],
+    outputs: [],
+  },
+] as const;
+
 export const setManagementFeeSelector = toFunctionSelector('setManagementFee(uint256)');
 export const setPerformanceFeeSelector = toFunctionSelector('setPerformanceFee(uint256)');
 export const increaseRelativeCapSelector = toFunctionSelector('increaseRelativeCap(bytes,uint256)');
 export const decreaseRelativeCapSelector = toFunctionSelector('decreaseRelativeCap(bytes,uint256)');
 export const addAdapterSelector = toFunctionSelector('addAdapter(address)');
+export const setSendSharesGateSelector = toFunctionSelector('setSendSharesGate(address)');
+export const setReceiveAssetsGateSelector = toFunctionSelector('setReceiveAssetsGate(address)');
 
 export type ProposalType =
   | 'management-fee'
@@ -198,6 +220,42 @@ export function decodeAddAdapter(data: Hex): Address | undefined {
     const [adapter] = decoded.args;
     if (adapter === '0x0000000000000000000000000000000000000000') return undefined;
     return getAddress(adapter);
+  } catch {
+    return undefined;
+  }
+}
+
+export function decodeSetSendSharesGate(data: Hex): Address | undefined {
+  if (
+    size(data) !== 36 ||
+    data.slice(0, 10).toLowerCase() !== setSendSharesGateSelector.toLowerCase()
+  ) {
+    return undefined;
+  }
+
+  try {
+    const decoded = decodeFunctionData({ abi: setSendSharesGateAbi, data });
+    if (decoded.functionName !== 'setSendSharesGate') return undefined;
+    const [gate] = decoded.args;
+    return getAddress(gate);
+  } catch {
+    return undefined;
+  }
+}
+
+export function decodeSetReceiveAssetsGate(data: Hex): Address | undefined {
+  if (
+    size(data) !== 36 ||
+    data.slice(0, 10).toLowerCase() !== setReceiveAssetsGateSelector.toLowerCase()
+  ) {
+    return undefined;
+  }
+
+  try {
+    const decoded = decodeFunctionData({ abi: setReceiveAssetsGateAbi, data });
+    if (decoded.functionName !== 'setReceiveAssetsGate') return undefined;
+    const [gate] = decoded.args;
+    return getAddress(gate);
   } catch {
     return undefined;
   }
@@ -350,6 +408,24 @@ export function identifyProposal(
       ? {
           proposalType: 'add-adapter',
           adapter,
+        }
+      : undefined;
+  }
+  if (sel === setSendSharesGateSelector.toLowerCase()) {
+    const gate = decodeSetSendSharesGate(data);
+    return gate !== undefined
+      ? {
+          proposalType: 'send-shares-gate',
+          gate,
+        }
+      : undefined;
+  }
+  if (sel === setReceiveAssetsGateSelector.toLowerCase()) {
+    const gate = decodeSetReceiveAssetsGate(data);
+    return gate !== undefined
+      ? {
+          proposalType: 'receive-assets-gate',
+          gate,
         }
       : undefined;
   }

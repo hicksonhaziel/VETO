@@ -2,6 +2,7 @@ import { financialOperationKey, type ReadyExitIntent } from '@veto/core';
 import { keeperHubIdempotencyKey } from '@veto/keeperhub';
 import type {
   AdapterAssessment,
+  GateAssessment,
   ManagementFeeAssessment,
   PerformanceFeeAssessment,
   RelativeCapAssessment,
@@ -13,6 +14,7 @@ export type ProposalAssessment =
   | PerformanceFeeAssessment
   | RelativeCapAssessment
   | AdapterAssessment
+  | GateAssessment
   | {
       eligible: boolean;
       reason: string;
