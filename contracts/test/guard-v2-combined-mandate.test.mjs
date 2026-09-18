@@ -968,4 +968,70 @@ test('PHASE 5: VetoExitGuardV2 combined 5-policy mandate enforcement, cross-poli
     });
     assert.equal(mandateAfter[6], true, 'Mandate remains active');
   }
+
+  // ========================================================
+  // 13. Unknown and zero policy flag bits rejected with InvalidMandate
+  // ========================================================
+  {
+    const block = await client.getBlock();
+    const baseConfig = {
+      policyFlags: 0n,
+      maxManagementFee: 0n,
+      maxPerformanceFee: 0n,
+      relativeCaps: [],
+      approvedAdapters: [],
+      approvedSendSharesGates: [],
+      approvedReceiveAssetsGates: [],
+    };
+
+    // policyFlags == 0
+    await assert.rejects(
+      client.simulateContract({
+        account: owner,
+        address: guard,
+        abi: guardArtifact.abi,
+        functionName: 'armPolicyMandate',
+        args: [vault, 1000n, 1000n, block.timestamp + 10_000n, 300n, baseConfig],
+      }),
+      /InvalidMandate/,
+    );
+
+    // policyFlags has unknown bit 32
+    await assert.rejects(
+      client.simulateContract({
+        account: owner,
+        address: guard,
+        abi: guardArtifact.abi,
+        functionName: 'armPolicyMandate',
+        args: [
+          vault,
+          1000n,
+          1000n,
+          block.timestamp + 10_000n,
+          300n,
+          { ...baseConfig, policyFlags: 32n },
+        ],
+      }),
+      /InvalidMandate/,
+    );
+
+    // policyFlags has unknown bit 64 with valid bit 1
+    await assert.rejects(
+      client.simulateContract({
+        account: owner,
+        address: guard,
+        abi: guardArtifact.abi,
+        functionName: 'armPolicyMandate',
+        args: [
+          vault,
+          1000n,
+          1000n,
+          block.timestamp + 10_000n,
+          300n,
+          { ...baseConfig, policyFlags: 65n },
+        ],
+      }),
+      /InvalidMandate/,
+    );
+  }
 });

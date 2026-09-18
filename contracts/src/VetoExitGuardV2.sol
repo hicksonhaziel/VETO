@@ -134,6 +134,7 @@ contract VetoExitGuardV2 {
         if (
             shares == 0 || minAssets == 0 || expiresAt <= block.timestamp || safetySeconds == 0
                 || safetySeconds >= expiresAt - block.timestamp || config.policyFlags == 0
+                || (config.policyFlags & ~uint256(31)) != 0
         ) revert InvalidMandate();
 
         if ((config.policyFlags & POLICY_MANAGEMENT_FEE) != 0) {
