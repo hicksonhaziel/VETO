@@ -26,3 +26,20 @@ export const guardAbi = parseAbi([
   'event MandateArmed(uint256 indexed mandateId, address indexed owner, address indexed vault, uint256 shares, uint256 maxFeePerSecond, uint256 minAssets, uint256 expiresAt, uint256 safetySeconds)',
   'event MandateCancelled(uint256 indexed mandateId, address indexed owner)',
 ]);
+
+export const POLICY_MANAGEMENT_FEE = 1n << 0n;
+export const POLICY_PERFORMANCE_FEE = 1n << 1n;
+export const POLICY_RELATIVE_CAP = 1n << 2n;
+export const POLICY_ADAPTER_ALLOWLIST = 1n << 3n;
+export const POLICY_REDEMPTION_GATE_ALLOWLIST = 1n << 4n;
+
+export const guardV2Abi = parseAbi([
+  'struct RelativeCapLimit { bytes32 riskId; uint256 maxRelativeCap; }',
+  'struct PolicyConfig { uint256 policyFlags; uint256 maxManagementFee; uint256 maxPerformanceFee; RelativeCapLimit[] relativeCaps; address[] approvedAdapters; address[] approvedSendSharesGates; address[] approvedReceiveAssetsGates; }',
+  'function activeMandateByOwnerVault(address owner, address vault) view returns (uint256)',
+  'function mandates(uint256 mandateId) view returns (address owner, address vault, uint256 shares, uint256 minAssets, uint256 expiresAt, uint256 safetySeconds, bool active, uint256 policyFlags, uint256 maxManagementFee, uint256 maxPerformanceFee)',
+  'function armPolicyMandate(address vault, uint256 shares, uint256 minAssets, uint256 expiresAt, uint256 safetySeconds, PolicyConfig config) returns (uint256 mandateId)',
+  'function cancel(uint256 mandateId)',
+  'event PolicyMandateArmed(uint256 indexed mandateId, address indexed owner, address indexed vault, uint256 shares, uint256 minAssets, uint256 expiresAt, uint256 safetySeconds, uint256 policyFlags)',
+  'event MandateCancelled(uint256 indexed mandateId, address indexed owner)',
+]);

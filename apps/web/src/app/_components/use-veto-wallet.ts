@@ -88,6 +88,11 @@ export type ManagedRule = {
 
 export type RuleDraft = {
   feePercent: string;
+  performanceFeePercent?: string;
+  relativeCaps?: Array<{ riskId: string; maxRelativeCapPercent: string }>;
+  approvedAdapters?: string[];
+  approvedSendSharesGates?: string[];
+  approvedReceiveAssetsGates?: string[];
   shares: string;
   minimumReturn: string;
   expiresHours: string;

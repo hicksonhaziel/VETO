@@ -1,7 +1,7 @@
 import { createPublicClient, getAddress, http, type Address } from 'viem';
 import { baseSepolia } from 'viem/chains';
 
-export { erc20Abi, factoryAbi, guardAbi, vaultAbi } from '@/lib/veto-contracts';
+export { erc20Abi, factoryAbi, guardAbi, guardV2Abi, vaultAbi } from '@/lib/veto-contracts';
 
 export const chainId = baseSepolia.id;
 

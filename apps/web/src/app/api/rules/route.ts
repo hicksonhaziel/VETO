@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { decodeEventLog, getAddress, isAddress, isHash } from 'viem';
 
 import { database, ensureManagedRulesSchema } from '@/lib/veto-database';
-import { guardAbi, publicClient, runtimeConfig } from '@/lib/veto-runtime';
+import { guardAbi, guardV2Abi, publicClient, runtimeConfig } from '@/lib/veto-runtime';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -119,21 +119,95 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const armed = receipt.logs
+    let armedMandateId: bigint;
+    let armedShares: bigint;
+    let armedMaxFee: bigint;
+    let armedMinAssets: bigint;
+    let armedExpiresAt: bigint;
+    let armedSafetySeconds: bigint;
+    let guardVersion = 'v1';
+    let policyVersion = 1;
+    let policyConfigJson: Record<string, unknown> | null = null;
+
+    const armedV2 = receipt.logs
       .filter((log) => log.address.toLowerCase() === config.guard.toLowerCase())
       .flatMap((log) => {
         try {
-          const decoded = decodeEventLog({ abi: guardAbi, data: log.data, topics: log.topics });
-          return decoded.eventName === 'MandateArmed' ? [decoded.args] : [];
+          const decoded = decodeEventLog({ abi: guardV2Abi, data: log.data, topics: log.topics });
+          return decoded.eventName === 'PolicyMandateArmed' ? [decoded.args] : [];
         } catch {
           return [];
         }
       })[0];
-    if (!armed || getAddress(armed.owner) !== owner) {
-      return jsonError('MANDATE_ARMED_EVENT_NOT_FOUND', 409);
-    }
-    if (getAddress(armed.vault) !== config.vault) {
-      return jsonError('UNSUPPORTED_VAULT', 409);
+
+    if (armedV2) {
+      if (getAddress(armedV2.owner) !== owner) return jsonError('MANDATE_OWNER_MISMATCH', 409);
+      if (getAddress(armedV2.vault) !== config.vault) return jsonError('UNSUPPORTED_VAULT', 409);
+
+      // Verify directly from onchain guard contract state
+      const onchainMandate = await publicClient().readContract({
+        address: config.guard,
+        abi: guardV2Abi,
+        functionName: 'mandates',
+        args: [armedV2.mandateId],
+      });
+      const [
+        onchainOwner,
+        onchainVault,
+        onchainShares,
+        onchainMinAssets,
+        onchainExpiresAt,
+        onchainSafetySeconds,
+        onchainActive,
+        onchainPolicyFlags,
+        onchainMaxMgmtFee,
+        onchainMaxPerfFee,
+      ] = onchainMandate;
+
+      if (
+        !onchainActive ||
+        getAddress(onchainOwner) !== owner ||
+        getAddress(onchainVault) !== config.vault
+      ) {
+        return jsonError('ONCHAIN_MANDATE_INVALID', 409);
+      }
+
+      guardVersion = 'v2';
+      policyVersion = 2;
+      armedMandateId = armedV2.mandateId;
+      armedShares = onchainShares;
+      armedMaxFee = onchainMaxMgmtFee;
+      armedMinAssets = onchainMinAssets;
+      armedExpiresAt = onchainExpiresAt;
+      armedSafetySeconds = onchainSafetySeconds;
+      policyConfigJson = {
+        policyFlags: onchainPolicyFlags.toString(),
+        maxManagementFee: onchainMaxMgmtFee.toString(),
+        maxPerformanceFee: onchainMaxPerfFee.toString(),
+      };
+    } else {
+      const armedV1 = receipt.logs
+        .filter((log) => log.address.toLowerCase() === config.guard.toLowerCase())
+        .flatMap((log) => {
+          try {
+            const decoded = decodeEventLog({ abi: guardAbi, data: log.data, topics: log.topics });
+            return decoded.eventName === 'MandateArmed' ? [decoded.args] : [];
+          } catch {
+            return [];
+          }
+        })[0];
+      if (!armedV1 || getAddress(armedV1.owner) !== owner) {
+        return jsonError('MANDATE_ARMED_EVENT_NOT_FOUND', 409);
+      }
+      if (getAddress(armedV1.vault) !== config.vault) {
+        return jsonError('UNSUPPORTED_VAULT', 409);
+      }
+      armedMandateId = armedV1.mandateId;
+      armedShares = armedV1.shares;
+      armedMaxFee = armedV1.maxFeePerSecond;
+      armedMinAssets = armedV1.minAssets;
+      armedExpiresAt = armedV1.expiresAt;
+      armedSafetySeconds = armedV1.safetySeconds;
     }
 
     await ensureManagedRulesSchema();
@@ -149,25 +223,31 @@ export async function POST(request: NextRequest) {
         `INSERT INTO managed_rules (
           chain_id, factory_address, guard_address, mandate_id, owner_address, vault_address,
           shares, max_fee_per_second, min_assets, expires_at, safety_seconds,
-          arm_transaction_hash, arm_block, state
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'ACTIVE')
+          arm_transaction_hash, arm_block, state, guard_version, policy_version, policy_config_json
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'ACTIVE',$14,$15,$16)
         ON CONFLICT (chain_id, guard_address, mandate_id) DO UPDATE SET
           arm_transaction_hash = EXCLUDED.arm_transaction_hash,
-          state = 'ACTIVE', updated_at = now()`,
+          state = 'ACTIVE', guard_version = EXCLUDED.guard_version,
+          policy_version = EXCLUDED.policy_version,
+          policy_config_json = EXCLUDED.policy_config_json,
+          updated_at = now()`,
         [
           config.chainId,
           config.factory.toLowerCase(),
           config.guard.toLowerCase(),
-          armed.mandateId.toString(),
+          armedMandateId.toString(),
           owner.toLowerCase(),
           config.vault.toLowerCase(),
-          armed.shares.toString(),
-          armed.maxFeePerSecond.toString(),
-          armed.minAssets.toString(),
-          armed.expiresAt.toString(),
-          armed.safetySeconds.toString(),
+          armedShares.toString(),
+          armedMaxFee.toString(),
+          armedMinAssets.toString(),
+          armedExpiresAt.toString(),
+          armedSafetySeconds.toString(),
           transactionHash.toLowerCase(),
           receipt.blockNumber.toString(),
+          guardVersion,
+          policyVersion,
+          policyConfigJson ? JSON.stringify(policyConfigJson) : null,
         ],
       );
       await connection.query('COMMIT');
@@ -179,7 +259,8 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({
       state: 'ACTIVE',
-      mandateId: armed.mandateId.toString(),
+      mandateId: armedMandateId.toString(),
+      guardVersion,
       transactionHash,
     });
   } catch (error) {

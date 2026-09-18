@@ -1,0 +1,71 @@
+{
+  "vault": "0x050cE30b927Da55177A4914EC73480238BAD56f0",
+  "name": "Gauntlet USDC Prime",
+  "symbol": "gtusdcp",
+  "blockNumber": 51460446,
+  "observedAt": "2026-09-18T05:44:04.964Z",
+  "recipients": {
+    "managementFeeRecipient": "0x34702F5F789196A723B8DF6334922f145A7db1b2",
+    "performanceFeeRecipient": "0x34702F5F789196A723B8DF6334922f145A7db1b2"
+  },
+  "currentGates": {
+    "sendSharesGate": "0x0000000000000000000000000000000000000000",
+    "receiveAssetsGate": "0x0000000000000000000000000000000000000000"
+  },
+  "surface": [
+    {
+      "name": "setManagementFee",
+      "signature": "setManagementFee(uint256)",
+      "selector": "0xfe56e232",
+      "timelockSeconds": 259200,
+      "hasTimelock": true,
+      "isAbdicated": false,
+      "supportedByVeto": true
+    },
+    {
+      "name": "setPerformanceFee",
+      "signature": "setPerformanceFee(uint256)",
+      "selector": "0x70897b23",
+      "timelockSeconds": 259200,
+      "hasTimelock": true,
+      "isAbdicated": false,
+      "supportedByVeto": true
+    },
+    {
+      "name": "increaseRelativeCap",
+      "signature": "increaseRelativeCap(bytes,uint256)",
+      "selector": "0x2438525b",
+      "timelockSeconds": 259200,
+      "hasTimelock": true,
+      "isAbdicated": false,
+      "supportedByVeto": true
+    },
+    {
+      "name": "addAdapter",
+      "signature": "addAdapter(address)",
+      "selector": "0x60d54d41",
+      "timelockSeconds": 604800,
+      "hasTimelock": true,
+      "isAbdicated": false,
+      "supportedByVeto": true
+    },
+    {
+      "name": "setSendSharesGate",
+      "signature": "setSendSharesGate(address)",
+      "selector": "0xc21ad028",
+      "timelockSeconds": 604800,
+      "hasTimelock": true,
+      "isAbdicated": true,
+      "supportedByVeto": false
+    },
+    {
+      "name": "setReceiveAssetsGate",
+      "signature": "setReceiveAssetsGate(address)",
+      "selector": "0x04dbf0ce",
+      "timelockSeconds": 604800,
+      "hasTimelock": true,
+      "isAbdicated": true,
+      "supportedByVeto": false
+    }
+  ]
+}

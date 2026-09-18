@@ -28,6 +28,9 @@ export type ManagedRule = {
   guard: `0x${string}`;
   mandateId: bigint;
   startBlock: bigint;
+  guardVersion?: 'v1' | 'v2';
+  policyVersion?: number;
+  policyConfigJson?: Record<string, unknown>;
 };
 
 type IntentRow = {
@@ -381,8 +384,12 @@ export class PostgresIntentStore {
       guard_address: `0x${string}`;
       mandate_id: string;
       arm_block: string;
+      guard_version: string | null;
+      policy_version: number | null;
+      policy_config_json: Record<string, unknown> | null;
     }>(
-      `SELECT chain_id, factory_address, vault_address, guard_address, mandate_id, arm_block
+      `SELECT chain_id, factory_address, vault_address, guard_address, mandate_id, arm_block,
+              guard_version, policy_version, policy_config_json
        FROM managed_rules
        WHERE chain_id = $1 AND state = 'ACTIVE' AND arm_block IS NOT NULL
        ORDER BY created_at`,
@@ -395,6 +402,9 @@ export class PostgresIntentStore {
       guard: row.guard_address,
       mandateId: BigInt(row.mandate_id),
       startBlock: BigInt(row.arm_block),
+      guardVersion: (row.guard_version ?? 'v1') as 'v1' | 'v2',
+      policyVersion: row.policy_version ?? 1,
+      policyConfigJson: row.policy_config_json ?? undefined,
     }));
   }
 

@@ -788,6 +788,108 @@ function RuleDrawer({
               />
             </label>
           </div>
+
+          <details className="policy-accordion" open={false}>
+            <summary>
+              <strong>Additional Vault Policies (V2)</strong>
+              <small>
+                Configure ceilings for performance fees, relative caps, adapters, and gates
+              </small>
+            </summary>
+
+            <div className="policy-section">
+              <label>
+                Performance fee ceiling (%)
+                <input
+                  inputMode="decimal"
+                  placeholder="e.g. 15.0"
+                  readOnly={!isNew}
+                  value={draft.performanceFeePercent ?? ''}
+                  onChange={(e) => updateDraft('performanceFeePercent', e.target.value)}
+                />
+                <small>Fee charged on yield/performance, capped by protocol at 50%.</small>
+              </label>
+            </div>
+
+            <div className="policy-section">
+              <label>
+                Relative cap ceiling (risk ID & max %)
+                <input
+                  placeholder="e.g. 0x..., max 25%"
+                  readOnly={!isNew}
+                  value={draft.relativeCaps?.[0]?.maxRelativeCapPercent ?? ''}
+                  onChange={(e) =>
+                    setDraft((cur) => ({
+                      ...cur,
+                      relativeCaps: [
+                        {
+                          riskId:
+                            '0x0000000000000000000000000000000000000000000000000000000000000000',
+                          maxRelativeCapPercent: e.target.value,
+                        },
+                      ],
+                    }))
+                  }
+                />
+                <small>
+                  Limits what the vault may permit for this risk ID; it does not claim current
+                  allocation equals the cap.
+                </small>
+              </label>
+            </div>
+
+            <div className="policy-section">
+              <label>
+                Approved adapters (allowlist)
+                <input
+                  placeholder="e.g. 0x1111... (comma-separated)"
+                  readOnly={!isNew}
+                  value={draft.approvedAdapters?.join(', ') ?? ''}
+                  onChange={(e) =>
+                    setDraft((cur) => ({
+                      ...cur,
+                      approvedAdapters: e.target.value
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                />
+                <small>
+                  An added adapter becomes available to allocators; it does not mean capital has
+                  already moved.
+                </small>
+              </label>
+            </div>
+
+            <div className="policy-section">
+              <label>
+                Approved redemption gates (allowlist)
+                <input
+                  placeholder="e.g. 0x3333... (comma-separated)"
+                  readOnly={!isNew}
+                  value={draft.approvedSendSharesGates?.join(', ') ?? ''}
+                  onChange={(e) =>
+                    setDraft((cur) => ({
+                      ...cur,
+                      approvedSendSharesGates: e.target.value
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                      approvedReceiveAssetsGates: e.target.value
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                />
+                <small>
+                  VETO reacts to a gate outside your approved configuration; it does not claim the
+                  gate is malicious. address(0) is implicitly safe.
+                </small>
+              </label>
+            </div>
+          </details>
           <div className="form-grid">
             <label>
               Minimum return

@@ -27,6 +27,7 @@ export async function ensureManagedRulesSchema(): Promise<void> {
         '0003_managed_rules.sql',
         '0004_keeperhub_conditional.sql',
         '0005_proposal_attempts.sql',
+        '0006_multi_policy_rules.sql',
       ].map((name) => readFile(path.join(migrationDirectory, name), 'utf8')),
     );
     for (const sql of scripts) await database().query(sql);
