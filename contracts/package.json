@@ -9,7 +9,8 @@
     "test": "node --test test/**/*.test.mjs",
     "typecheck": "node scripts/compile.mjs --check",
     "live:morpho": "node scripts/live-morpho-read.mjs",
-    "v2:deploy:keeperhub": "node scripts/v2-demo/1-deploy-guard-v2-keeperhub.mjs"
+    "v2:deploy:keeperhub": "node scripts/v2-demo/1-deploy-guard-v2-keeperhub.mjs",
+    "v2:queue:management-fee": "node scripts/v2-demo/3-queue-management-fee-proposal.mjs"
   },
   "devDependencies": {
     "@foundry-rs/anvil": "1.7.1",
