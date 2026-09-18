@@ -74,6 +74,7 @@ export type ManagementFeeAssessmentReason =
   | 'eligible'
   | 'unsupported-vault'
   | 'unsupported-proposal'
+  | 'policy-disabled'
   | 'fee-within-owner-limit'
   | 'fee-exceeds-protocol-limit'
   | 'setter-abdicated'
@@ -105,8 +106,16 @@ export function assessManagementFeeProposal(options: {
   safetySeconds: bigint;
   expectedExecutableAt: bigint;
   snapshot: ManagementFeeSnapshot;
+  policyEnabled?: boolean;
 }): ManagementFeeAssessment {
-  const { data, maxFeePerSecond, safetySeconds, expectedExecutableAt, snapshot } = options;
+  const {
+    data,
+    maxFeePerSecond,
+    safetySeconds,
+    expectedExecutableAt,
+    snapshot,
+    policyEnabled = true,
+  } = options;
   const proposalHash = keccak256(data);
   const proposedFee = decodeManagementFee(data);
   const result = (
@@ -123,6 +132,7 @@ export function assessManagementFeeProposal(options: {
 
   if (!snapshot.factoryApproved) return result('unsupported-vault');
   if (proposedFee === undefined) return result('unsupported-proposal');
+  if (!policyEnabled) return result('policy-disabled');
   if (proposedFee <= maxFeePerSecond) return result('fee-within-owner-limit');
   if (proposedFee > maxManagementFeePerSecond) return result('fee-exceeds-protocol-limit');
   if (snapshot.abdicated) return result('setter-abdicated');
@@ -153,6 +163,7 @@ export async function verifyManagementFeeProposal<
   maxFeePerSecond: bigint;
   safetySeconds: bigint;
   expectedExecutableAt: bigint;
+  policyEnabled?: boolean;
   blockNumber?: bigint;
 }): Promise<ManagementFeeAssessment> {
   const {
@@ -220,6 +231,7 @@ export async function verifyManagementFeeProposal<
     maxFeePerSecond,
     safetySeconds,
     expectedExecutableAt,
+    policyEnabled: options.policyEnabled,
     snapshot: {
       factoryApproved,
       abdicated,

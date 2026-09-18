@@ -267,6 +267,7 @@ export async function scanConfiguredMandate<
           maxFeePerSecond: maxManagementFee,
           safetySeconds: mandateSafetySeconds,
           expectedExecutableAt: proposal.executableAt,
+          policyEnabled: config.guardVersion === 'v2' ? (policyFlags & 1n) !== 0n : true,
           blockNumber: toBlock,
         });
       } else if (proposal.selector.toLowerCase() === setPerformanceFeeSelector.toLowerCase()) {

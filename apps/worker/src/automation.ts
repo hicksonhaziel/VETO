@@ -18,6 +18,7 @@ type AutomationConfig = MorphoScannerConfig & {
   keeperHubBaseUrl: string;
   rpcUrl: string;
   pollIntervalMs: number;
+  policyVersion: number;
 };
 
 export const WAITING_INTENT_STATES: ReadonlySet<IntentState> = new Set([
@@ -48,17 +49,32 @@ function positiveInteger(value: string, name: string): number {
   return parsed;
 }
 
+function parseGuardVersion(environment: NodeJS.ProcessEnv): {
+  guardVersion: 'v1' | 'v2';
+  policyVersion: number;
+} {
+  const raw = environment.VETO_GUARD_VERSION;
+  if (!raw) throw new Error('MISSING_ENVIRONMENT_VARIABLE:VETO_GUARD_VERSION');
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'v1') return { guardVersion: 'v1', policyVersion: 1 };
+  if (normalized === 'v2') return { guardVersion: 'v2', policyVersion: 2 };
+  throw new Error('INVALID_VETO_GUARD_VERSION');
+}
+
 export function automationConfigFromEnv(environment = process.env): AutomationConfig {
   const chainId = positiveInteger(required(environment, 'VETO_CHAIN_ID'), 'VETO_CHAIN_ID');
   if (chainId !== base.id && chainId !== baseSepolia.id) {
     throw new Error('UNSUPPORTED_VETO_CHAIN_ID');
   }
+  const { guardVersion, policyVersion } = parseGuardVersion(environment);
   return {
     databaseUrl: required(environment, 'DATABASE_URL'),
     keeperHubApiKey: required(environment, 'KEEPERHUB_API_KEY'),
     keeperHubBaseUrl: environment.KEEPERHUB_BASE_URL ?? 'https://app.keeperhub.com',
     rpcUrl: required(environment, 'VETO_RPC_URL'),
     chainId,
+    guardVersion,
+    policyVersion,
     factory: getAddress(required(environment, 'VETO_FACTORY_ADDRESS')),
     vault: getAddress(required(environment, 'VETO_VAULT_ADDRESS')),
     guard: getAddress(required(environment, 'VETO_GUARD_ADDRESS')),
@@ -82,7 +98,44 @@ async function loadMigrations(): Promise<string[]> {
       '0003_managed_rules.sql',
       '0004_keeperhub_conditional.sql',
       '0005_proposal_attempts.sql',
+      '0006_multi_policy_rules.sql',
     ].map((name) => readFile(new URL(`../../../db/migrations/${name}`, import.meta.url), 'utf8')),
+  );
+}
+
+export function buildScanTargets(
+  config: MorphoScannerConfig,
+  registeredRules: import('./store.js').ManagedRule[],
+): MorphoScannerConfig[] {
+  for (const rule of registeredRules) {
+    if (
+      rule.guard.toLowerCase() === config.guard.toLowerCase() &&
+      rule.mandateId === config.mandateId
+    ) {
+      const ruleVersion = rule.guardVersion ?? 'v1';
+      const configVersion = config.guardVersion ?? 'v1';
+      if (ruleVersion !== configVersion) {
+        throw new Error(
+          `CONFIGURATION_CONFLICT: Target ${config.guard}:${config.mandateId} has version mismatch between env (${configVersion}) and DB (${ruleVersion})`,
+        );
+      }
+    }
+  }
+
+  return [
+    config,
+    ...registeredRules.map((rule) => ({
+      ...rule,
+      confirmationDepth: config.confirmationDepth,
+      reorgRewindBlocks: config.reorgRewindBlocks,
+    })),
+  ].filter(
+    (candidate, index, candidates) =>
+      candidates.findIndex(
+        (other) =>
+          other.guard.toLowerCase() === candidate.guard.toLowerCase() &&
+          other.mandateId === candidate.mandateId,
+      ) === index,
   );
 }
 
@@ -109,21 +162,7 @@ export async function startAutomation(config: AutomationConfig) {
     running = true;
     try {
       const registeredRules = await store.listActiveManagedRules(config.chainId);
-      const scanTargets: MorphoScannerConfig[] = [
-        config,
-        ...registeredRules.map((rule) => ({
-          ...rule,
-          confirmationDepth: config.confirmationDepth,
-          reorgRewindBlocks: config.reorgRewindBlocks,
-        })),
-      ].filter(
-        (candidate, index, candidates) =>
-          candidates.findIndex(
-            (other) =>
-              other.guard.toLowerCase() === candidate.guard.toLowerCase() &&
-              other.mandateId === candidate.mandateId,
-          ) === index,
-      );
+      const scanTargets = buildScanTargets(config, registeredRules);
       const scans = await Promise.all(
         scanTargets.map((target) => scanConfiguredMandate({ client, store, config: target })),
       );

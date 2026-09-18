@@ -200,6 +200,7 @@ postgresTest(
       '0003_managed_rules.sql',
       '0004_keeperhub_conditional.sql',
       '0005_proposal_attempts.sql',
+      '0006_multi_policy_rules.sql',
     ]) {
       await store.applyMigration(
         await readFile(new URL(`../../../db/migrations/${migration}`, import.meta.url), 'utf8'),
@@ -266,6 +267,49 @@ postgresTest(
       abi: vaultAbi,
       functionName: 'revoke',
       args: [nonBreachData],
+    });
+
+    // Step 1b: Submit management fee proposal when management fee policy is disabled (Finding 5)
+    const mgmtFeeData = encodeFunctionData({
+      abi: [
+        {
+          type: 'function',
+          name: 'setManagementFee',
+          stateMutability: 'nonpayable',
+          inputs: [{ name: 'newFee', type: 'uint256' }],
+          outputs: [],
+        },
+      ],
+      functionName: 'setManagementFee',
+      args: [50_000_000_000_000_000n],
+    });
+    const submitMgmtFee = await ownerClient.writeContract({
+      address: vault,
+      abi: vaultAbi,
+      functionName: 'submit',
+      args: [mgmtFeeData],
+    });
+    await client.waitForTransactionReceipt({ hash: submitMgmtFee });
+
+    const mgmtFeeScan = await scanConfiguredMandate({ client, store, config });
+    assert.equal(mgmtFeeScan.proposals, 1);
+    assert.equal(mgmtFeeScan.readyCreated, 0);
+    assert.equal(mgmtFeeScan.decisionsRecorded, 1);
+
+    const mgmtFeeDecisions = await pool.query<{ decision: string }>(
+      'SELECT decision FROM proposal_decisions ORDER BY created_at DESC LIMIT 1',
+    );
+    assert.equal(mgmtFeeDecisions.rows[0]?.decision, 'policy-disabled');
+
+    const mgmtFeeIntents = await pool.query('SELECT count(*) FROM exit_intents');
+    assert.equal(mgmtFeeIntents.rows[0].count, '0');
+
+    // Revoke management fee
+    await ownerClient.writeContract({
+      address: vault,
+      abi: vaultAbi,
+      functionName: 'revoke',
+      args: [mgmtFeeData],
     });
 
     // Step 2: Submit breaching performance fee (20% > 10%)
