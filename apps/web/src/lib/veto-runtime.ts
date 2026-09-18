@@ -12,6 +12,7 @@ export type RuntimeConfig = {
   factory: Address;
   vault: Address;
   guard: Address;
+  guardVersion: 'v1' | 'v2';
   explorerUrl: string;
 };
 
@@ -19,6 +20,15 @@ function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`MISSING_${name}`);
   return value;
+}
+
+export function parseGuardVersion(value: string | undefined): 'v1' | 'v2' {
+  if (!value) throw new Error('MISSING_VETO_GUARD_VERSION');
+  const normalized = value.trim().toLowerCase();
+  if (normalized !== 'v1' && normalized !== 'v2') {
+    throw new Error('INVALID_VETO_GUARD_VERSION');
+  }
+  return normalized;
 }
 
 export function runtimeConfig(): RuntimeConfig {
@@ -31,6 +41,7 @@ export function runtimeConfig(): RuntimeConfig {
     factory: getAddress(required('VETO_FACTORY_ADDRESS')),
     vault: getAddress(required('VETO_VAULT_ADDRESS')),
     guard: getAddress(required('VETO_GUARD_ADDRESS')),
+    guardVersion: parseGuardVersion(process.env.VETO_GUARD_VERSION),
     explorerUrl: 'https://base-sepolia.blockscout.com',
   };
 }

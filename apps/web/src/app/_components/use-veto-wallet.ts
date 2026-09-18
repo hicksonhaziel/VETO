@@ -13,7 +13,12 @@ import {
 } from 'viem';
 import { baseSepolia } from 'viem/chains';
 
-import { guardAbi, vaultAbi } from '@/lib/veto-contracts';
+import { guardAbi, guardV2Abi, vaultAbi } from '@/lib/veto-contracts';
+import {
+  assertV1DraftCompatible,
+  buildV2PolicyConfig,
+  type RuleDraftV2,
+} from '@/lib/policy-builder';
 
 type EthereumProvider = EIP1193Provider & {
   on?: (event: 'accountsChanged', listener: (accounts: string[]) => void) => void;
@@ -32,11 +37,40 @@ export type RuntimeStatus = {
   factory: Address;
   vault: Address;
   guard: Address;
+  guardVersion: 'v1' | 'v2';
   explorerUrl: string;
   latestBlock: string;
   database: 'ready' | 'unavailable' | 'unconfigured';
   monitoringReady: boolean;
 };
+
+export type MandateDetails =
+  | {
+      version?: 'v1';
+      mandateId: string;
+      owner?: Address;
+      vault?: Address;
+      shares: string;
+      maxFeePerSecond: string;
+      minAssets: string;
+      expiresAt: string;
+      safetySeconds: string;
+      active: boolean;
+    }
+  | {
+      version: 'v2';
+      mandateId: string;
+      owner: Address;
+      vault: Address;
+      shares: string;
+      minAssets: string;
+      expiresAt: string;
+      safetySeconds: string;
+      active: boolean;
+      policyFlags: string;
+      maxManagementFee: string;
+      maxPerformanceFee: string;
+    };
 
 export type LivePosition = {
   observedAtBlock: string;
@@ -53,15 +87,7 @@ export type LivePosition = {
     assetsFormatted: string;
     allowance: string;
   };
-  mandate: null | {
-    mandateId: string;
-    shares: string;
-    maxFeePerSecond: string;
-    minAssets: string;
-    expiresAt: string;
-    safetySeconds: string;
-    active: boolean;
-  };
+  mandate: null | MandateDetails;
   contracts: {
     factory: Address;
     guard: Address;
@@ -81,23 +107,15 @@ export type ManagedRule = {
   safety_seconds: string;
   arm_transaction_hash: Hash;
   state: 'ACTIVE' | 'CANCELLED' | 'EXITED';
+  guard_version?: 'v1' | 'v2';
+  policy_version?: number;
+  policy_config_json?: Record<string, unknown>;
   execution_state?: string;
   execution_id?: string;
   exit_transaction_hash?: Hash;
 };
 
-export type RuleDraft = {
-  feePercent: string;
-  performanceFeePercent?: string;
-  relativeCaps?: Array<{ riskId: string; maxRelativeCapPercent: string }>;
-  approvedAdapters?: string[];
-  approvedSendSharesGates?: string[];
-  approvedReceiveAssetsGates?: string[];
-  shares: string;
-  minimumReturn: string;
-  expiresHours: string;
-  safetyMinutes: string;
-};
+export type RuleDraft = RuleDraftV2;
 
 type ActionState =
   | { stage: 'idle' }
@@ -213,68 +231,145 @@ export function useVetoWallet() {
     try {
       const shares = parseUnits(draft.shares, position.position.decimals);
       const minimumReturn = parseUnits(draft.minimumReturn, position.position.decimals);
-      const feeWad = parseUnits(draft.feePercent, 18) / 100n;
-      const maxFeePerSecond = feeWad / 31_536_000n;
       const safetySeconds = BigInt(Math.round(Number(draft.safetyMinutes) * 60));
       const expiresAt = BigInt(Math.floor(Date.now() / 1000 + Number(draft.expiresHours) * 3600));
+
       if (shares <= 0n || shares > BigInt(position.position.shares)) {
         throw new Error('Share amount exceeds the connected position.');
       }
       if (minimumReturn <= 0n || minimumReturn > BigInt(position.position.assets)) {
         throw new Error('Minimum return must fit the current preview.');
       }
-      if (maxFeePerSecond <= 0n || safetySeconds <= 0n) throw new Error('Rule limits are invalid.');
+      if (safetySeconds <= 0n) throw new Error('Safety window must be greater than zero.');
+      if (expiresAt <= BigInt(Math.floor(Date.now() / 1000))) {
+        throw new Error('Expiration must be in the future.');
+      }
 
-      const wallet = await walletClient();
-      setAction({ stage: 'approving', message: '1 of 2 · Approve the exact share amount' });
-      const approvalHash = await wallet.writeContract({
-        address: position.position.vault,
-        abi: vaultAbi,
-        functionName: 'approve',
-        args: [runtime.guard, shares],
-      });
-      const approvalReceipt = await publicChainClient.waitForTransactionReceipt({
-        hash: approvalHash,
-        confirmations: 1,
-      });
-      if (approvalReceipt.status !== 'success') throw new Error('Share approval reverted.');
+      const isV2 = runtime.guardVersion === 'v2';
 
-      setAction({ stage: 'arming', message: '2 of 2 · Sign the bounded exit rule', approvalHash });
-      const armHash = await wallet.writeContract({
-        address: runtime.guard,
-        abi: guardAbi,
-        functionName: 'arm',
-        args: [
-          position.position.vault,
-          shares,
-          maxFeePerSecond,
-          minimumReturn,
-          expiresAt,
-          safetySeconds,
-        ],
-      });
-      const armReceipt = await publicChainClient.waitForTransactionReceipt({
-        hash: armHash,
-        confirmations: 1,
-      });
-      if (armReceipt.status !== 'success') throw new Error('Rule activation reverted.');
+      if (!isV2) {
+        assertV1DraftCompatible(draft);
 
-      setAction({
-        stage: 'registering',
-        message: 'Registering the verified receipt with VETO',
-        transactionHash: armHash,
-      });
-      await fetch('/api/rules', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'register', owner: address, transactionHash: armHash }),
-      }).then((response) => responseJson(response));
-      await refreshOwner(address);
-      setAction({
-        stage: 'complete',
-        message: 'Exit rule armed and monitored',
-        transactionHash: armHash,
-      });
+        if (!draft.feePercent || draft.feePercent.trim() === '') {
+          throw new Error('Management fee ceiling is required for V1 mandates.');
+        }
+        const feeWad = parseUnits(draft.feePercent, 18) / 100n;
+        const maxFeePerSecond = feeWad / 31_536_000n;
+        if (maxFeePerSecond <= 0n)
+          throw new Error('Management fee rate per second must be positive.');
+
+        const wallet = await walletClient();
+        setAction({ stage: 'approving', message: '1 of 2 · Approve the exact share amount' });
+        const approvalHash = await wallet.writeContract({
+          address: position.position.vault,
+          abi: vaultAbi,
+          functionName: 'approve',
+          args: [runtime.guard, shares],
+        });
+        const approvalReceipt = await publicChainClient.waitForTransactionReceipt({
+          hash: approvalHash,
+          confirmations: 1,
+        });
+        if (approvalReceipt.status !== 'success') throw new Error('Share approval reverted.');
+
+        setAction({
+          stage: 'arming',
+          message: '2 of 2 · Sign the bounded exit rule',
+          approvalHash,
+        });
+        const armHash = await wallet.writeContract({
+          address: runtime.guard,
+          abi: guardAbi,
+          functionName: 'arm',
+          args: [
+            position.position.vault,
+            shares,
+            maxFeePerSecond,
+            minimumReturn,
+            expiresAt,
+            safetySeconds,
+          ],
+        });
+        const armReceipt = await publicChainClient.waitForTransactionReceipt({
+          hash: armHash,
+          confirmations: 1,
+        });
+        if (armReceipt.status !== 'success') throw new Error('Rule activation reverted.');
+
+        setAction({
+          stage: 'registering',
+          message: 'Registering the verified receipt with VETO',
+          transactionHash: armHash,
+        });
+        await fetch('/api/rules', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'register', owner: address, transactionHash: armHash }),
+        }).then((response) => responseJson(response));
+        await refreshOwner(address);
+        setAction({
+          stage: 'complete',
+          message: 'Exit rule armed and monitored',
+          transactionHash: armHash,
+        });
+      } else {
+        const policyConfig = buildV2PolicyConfig(draft);
+
+        const wallet = await walletClient();
+        setAction({ stage: 'approving', message: '1 of 2 · Approve the exact share amount' });
+        const approvalHash = await wallet.writeContract({
+          address: position.position.vault,
+          abi: vaultAbi,
+          functionName: 'approve',
+          args: [runtime.guard, shares],
+        });
+        const approvalReceipt = await publicChainClient.waitForTransactionReceipt({
+          hash: approvalHash,
+          confirmations: 1,
+        });
+        if (approvalReceipt.status !== 'success') throw new Error('Share approval reverted.');
+
+        setAction({
+          stage: 'arming',
+          message: '2 of 2 · Sign the multi-policy exit rule',
+          approvalHash,
+        });
+        const armHash = await wallet.writeContract({
+          address: runtime.guard,
+          abi: guardV2Abi,
+          functionName: 'armPolicyMandate',
+          args: [
+            position.position.vault,
+            shares,
+            minimumReturn,
+            expiresAt,
+            safetySeconds,
+            policyConfig,
+          ],
+        });
+        const armReceipt = await publicChainClient.waitForTransactionReceipt({
+          hash: armHash,
+          confirmations: 1,
+        });
+        if (armReceipt.status !== 'success') throw new Error('Rule activation reverted.');
+
+        setAction({
+          stage: 'registering',
+          message: 'Registering the verified receipt with VETO',
+          transactionHash: armHash,
+        });
+        await fetch('/api/rules', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'register', owner: address, transactionHash: armHash }),
+        }).then((response) => responseJson(response));
+        await refreshOwner(address);
+        setAction({
+          stage: 'complete',
+          message: 'Exit rule armed and monitored',
+          transactionHash: armHash,
+        });
+      }
     } catch (error) {
       setAction({
         stage: 'error',

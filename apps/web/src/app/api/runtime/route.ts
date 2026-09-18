@@ -25,6 +25,7 @@ export async function GET() {
       factory: config.factory,
       vault: config.vault,
       guard: config.guard,
+      guardVersion: config.guardVersion,
       explorerUrl: config.explorerUrl,
       latestBlock: blockNumber.toString(),
       database: databaseStatus,

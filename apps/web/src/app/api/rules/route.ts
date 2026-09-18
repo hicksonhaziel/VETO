@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { decodeEventLog, getAddress, isAddress, isHash } from 'viem';
+import { decodeEventLog, decodeFunctionData, getAddress, isAddress, isHash } from 'viem';
 
 import { database, ensureManagedRulesSchema } from '@/lib/veto-database';
 import { guardAbi, guardV2Abi, publicClient, runtimeConfig } from '@/lib/veto-runtime';
@@ -180,10 +180,133 @@ export async function POST(request: NextRequest) {
       armedMinAssets = onchainMinAssets;
       armedExpiresAt = onchainExpiresAt;
       armedSafetySeconds = onchainSafetySeconds;
+
+      // 1. Fetch transaction input
+      const tx = await publicClient().getTransaction({ hash: transactionHash });
+      let decodedCalldata: ReturnType<typeof decodeFunctionData<typeof guardV2Abi>>;
+      try {
+        decodedCalldata = decodeFunctionData({ abi: guardV2Abi, data: tx.input });
+      } catch {
+        return jsonError('INVALID_TRANSACTION_CALLDATA', 409);
+      }
+      if (decodedCalldata.functionName !== 'armPolicyMandate') {
+        return jsonError('UNEXPECTED_TRANSACTION_FUNCTION', 409);
+      }
+      const [txVault, txShares, txMinAssets, txExpiresAt, txSafetySeconds, txConfig] =
+        decodedCalldata.args as [
+          string,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          {
+            policyFlags: bigint;
+            maxManagementFee: bigint;
+            maxPerformanceFee: bigint;
+            relativeCaps: readonly { riskId: `0x${string}`; maxRelativeCap: bigint }[];
+            approvedAdapters: readonly `0x${string}`[];
+            approvedSendSharesGates: readonly `0x${string}`[];
+            approvedReceiveAssetsGates: readonly `0x${string}`[];
+          },
+        ];
+
+      if (
+        getAddress(txVault) !== config.vault ||
+        txShares !== onchainShares ||
+        txMinAssets !== onchainMinAssets ||
+        txExpiresAt !== onchainExpiresAt ||
+        txSafetySeconds !== onchainSafetySeconds ||
+        txConfig.policyFlags !== onchainPolicyFlags ||
+        txConfig.maxManagementFee !== onchainMaxMgmtFee ||
+        txConfig.maxPerformanceFee !== onchainMaxPerfFee
+      ) {
+        return jsonError('TRANSACTION_INPUT_MANDATE_MISMATCH', 409);
+      }
+
+      // Verify each relative cap onchain
+      const verifiedRelativeCaps: Array<{ riskId: string; maxRelativeCap: string }> = [];
+      if ((onchainPolicyFlags & 4n) !== 0n) {
+        for (const cap of txConfig.relativeCaps) {
+          const [hasCap, maxCap] = await Promise.all([
+            publicClient().readContract({
+              address: config.guard,
+              abi: guardV2Abi,
+              functionName: 'hasRelativeCapByMandateRisk',
+              args: [armedV2.mandateId, cap.riskId],
+            }),
+            publicClient().readContract({
+              address: config.guard,
+              abi: guardV2Abi,
+              functionName: 'maxRelativeCapByMandateRisk',
+              args: [armedV2.mandateId, cap.riskId],
+            }),
+          ]);
+          if (!hasCap || maxCap !== cap.maxRelativeCap) {
+            return jsonError('ONCHAIN_RELATIVE_CAP_VERIFICATION_FAILED', 409);
+          }
+          verifiedRelativeCaps.push({
+            riskId: cap.riskId,
+            maxRelativeCap: cap.maxRelativeCap.toString(),
+          });
+        }
+      }
+
+      // Verify each adapter onchain
+      const verifiedAdapters: string[] = [];
+      if ((onchainPolicyFlags & 8n) !== 0n) {
+        for (const adapter of txConfig.approvedAdapters) {
+          const isApproved = await publicClient().readContract({
+            address: config.guard,
+            abi: guardV2Abi,
+            functionName: 'approvedAdapterByMandate',
+            args: [armedV2.mandateId, adapter],
+          });
+          if (!isApproved) {
+            return jsonError('ONCHAIN_ADAPTER_VERIFICATION_FAILED', 409);
+          }
+          verifiedAdapters.push(getAddress(adapter));
+        }
+      }
+
+      // Verify each send gate and receive gate onchain
+      const verifiedSendGates: string[] = [];
+      const verifiedReceiveGates: string[] = [];
+      if ((onchainPolicyFlags & 16n) !== 0n) {
+        for (const gate of txConfig.approvedSendSharesGates) {
+          const isApproved = await publicClient().readContract({
+            address: config.guard,
+            abi: guardV2Abi,
+            functionName: 'approvedSendSharesGateByMandate',
+            args: [armedV2.mandateId, gate],
+          });
+          if (!isApproved) {
+            return jsonError('ONCHAIN_SEND_GATE_VERIFICATION_FAILED', 409);
+          }
+          verifiedSendGates.push(getAddress(gate));
+        }
+
+        for (const gate of txConfig.approvedReceiveAssetsGates) {
+          const isApproved = await publicClient().readContract({
+            address: config.guard,
+            abi: guardV2Abi,
+            functionName: 'approvedReceiveAssetsGateByMandate',
+            args: [armedV2.mandateId, gate],
+          });
+          if (!isApproved) {
+            return jsonError('ONCHAIN_RECEIVE_GATE_VERIFICATION_FAILED', 409);
+          }
+          verifiedReceiveGates.push(getAddress(gate));
+        }
+      }
+
       policyConfigJson = {
         policyFlags: onchainPolicyFlags.toString(),
         maxManagementFee: onchainMaxMgmtFee.toString(),
         maxPerformanceFee: onchainMaxPerfFee.toString(),
+        relativeCaps: verifiedRelativeCaps,
+        approvedAdapters: verifiedAdapters,
+        approvedSendSharesGates: verifiedSendGates,
+        approvedReceiveAssetsGates: verifiedReceiveGates,
       };
     } else {
       const armedV1 = receipt.logs

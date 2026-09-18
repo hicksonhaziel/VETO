@@ -5,6 +5,7 @@ import {
   erc20Abi,
   factoryAbi,
   guardAbi,
+  guardV2Abi,
   publicClient,
   runtimeConfig,
   vaultAbi,
@@ -60,15 +61,78 @@ export async function GET(request: NextRequest) {
       }),
     ]);
     const mandateId = encodedMandateId > 0n ? encodedMandateId - 1n : undefined;
+    const isV2 = config.guardVersion === 'v2';
     const mandate =
       mandateId === undefined
         ? undefined
-        : await client.readContract({
-            address: config.guard,
-            abi: guardAbi,
-            functionName: 'mandates',
-            args: [mandateId],
-          });
+        : isV2
+          ? await client.readContract({
+              address: config.guard,
+              abi: guardV2Abi,
+              functionName: 'mandates',
+              args: [mandateId],
+            })
+          : await client.readContract({
+              address: config.guard,
+              abi: guardAbi,
+              functionName: 'mandates',
+              args: [mandateId],
+            });
+
+    let formattedMandate: Record<string, unknown> | null = null;
+    if (mandate) {
+      if (isV2) {
+        const m = mandate as readonly [
+          string,
+          string,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          boolean,
+          bigint,
+          bigint,
+          bigint,
+        ];
+        formattedMandate = {
+          version: 'v2',
+          mandateId: mandateId?.toString(),
+          owner: m[0],
+          vault: m[1],
+          shares: m[2].toString(),
+          minAssets: m[3].toString(),
+          expiresAt: m[4].toString(),
+          safetySeconds: m[5].toString(),
+          active: m[6],
+          policyFlags: m[7].toString(),
+          maxManagementFee: m[8].toString(),
+          maxPerformanceFee: m[9].toString(),
+        };
+      } else {
+        const m = mandate as readonly [
+          string,
+          string,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          boolean,
+        ];
+        formattedMandate = {
+          version: 'v1',
+          mandateId: mandateId?.toString(),
+          owner: m[0],
+          vault: m[1],
+          shares: m[2].toString(),
+          maxFeePerSecond: m[3].toString(),
+          minAssets: m[4].toString(),
+          expiresAt: m[5].toString(),
+          safetySeconds: m[6].toString(),
+          active: m[7],
+        };
+      }
+    }
 
     return NextResponse.json({
       observedAtBlock: latestBlock.toString(),
@@ -85,19 +149,7 @@ export async function GET(request: NextRequest) {
         assetsFormatted: formatUnits(assets, assetDecimals),
         allowance: allowance.toString(),
       },
-      mandate: mandate
-        ? {
-            mandateId: mandateId?.toString(),
-            owner: mandate[0],
-            vault: mandate[1],
-            shares: mandate[2].toString(),
-            maxFeePerSecond: mandate[3].toString(),
-            minAssets: mandate[4].toString(),
-            expiresAt: mandate[5].toString(),
-            safetySeconds: mandate[6].toString(),
-            active: mandate[7],
-          }
-        : null,
+      mandate: formattedMandate,
       contracts: {
         factory: config.factory,
         guard: config.guard,

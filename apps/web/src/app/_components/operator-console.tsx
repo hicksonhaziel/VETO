@@ -382,8 +382,9 @@ function Rules({
           <span className="overline">Owner mandates</span>
           <h1>Exit rules</h1>
           <p>
-            Owner-defined conditions for continued participation. The current implementation
-            supports one rule type: a queued management-fee ceiling.
+            {wallet.runtime?.guardVersion === 'v2'
+              ? 'One mandate, five optional depositor policy boundaries. Pre-authorized conditional exits for queued Morpho Vault V2 governance changes.'
+              : 'Owner-defined conditions for continued participation. Implemented rule type: queued management-fee ceiling (V1).'}
           </p>
         </div>
         <button className="button button-primary" onClick={openNewRule} type="button">
@@ -407,6 +408,57 @@ function Rules({
                 ? `The database and chain agree on an owner-bound rule for ${shorten(liveRule.vault_address, 10, 8)}.`
                 : 'The connected address has no rule registered with this VETO runtime.'}
             </p>
+            {liveRule && (
+              <div style={{ margin: '0.75rem 0', fontSize: '0.875rem' }}>
+                {liveRule.guard_version === 'v2' ? (
+                  <div>
+                    <span
+                      style={{
+                        background: '#2563eb',
+                        color: '#fff',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      V2 Multi-Policy
+                    </span>
+                    {liveRule.policy_config_json ? (
+                      <div style={{ marginTop: '0.5rem', color: '#94a3b8' }}>
+                        {Boolean(
+                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 1n,
+                        ) && <div>✓ Management fee ceiling configured</div>}
+                        {Boolean(
+                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 2n,
+                        ) && <div>✓ Performance fee ceiling configured</div>}
+                        {Boolean(
+                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 4n,
+                        ) && <div>✓ Relative cap ceilings configured</div>}
+                        {Boolean(
+                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 8n,
+                        ) && <div>✓ Adapter allowlist configured</div>}
+                        {Boolean(
+                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 16n,
+                        ) && <div>✓ Redemption gate allowlists configured</div>}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <span
+                    style={{
+                      background: '#475569',
+                      color: '#fff',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                    }}
+                  >
+                    V1 Management Fee Ceiling
+                  </span>
+                )}
+              </div>
+            )}
             {liveRule ? (
               <button
                 className="button button-danger"
@@ -720,7 +772,23 @@ function RuleDrawer({
     minimumReturn: wallet.position?.position.assetsFormatted ?? evidence.instruction.minimumReturn,
     expiresHours: '24',
     safetyMinutes: '5',
+    managementFeeEnabled: true,
+    performanceFeeEnabled: false,
+    performanceFeePercent: '',
+    relativeCapEnabled: false,
+    relativeCaps: [],
+    adapterAllowlistEnabled: false,
+    approvedAdapters: [],
+    redemptionGateAllowlistEnabled: false,
+    approvedSendSharesGates: [],
+    approvedReceiveAssetsGates: [],
   });
+  const [relativeCapRows, setRelativeCapRows] = useState<
+    Array<{ riskId: string; maxRelativeCapPercent: string }>
+  >([]);
+  const [adapterInput, setAdapterInput] = useState('');
+  const [sendGateInput, setSendGateInput] = useState('');
+  const [receiveGateInput, setReceiveGateInput] = useState('');
   const working = ['approving', 'arming', 'registering'].includes(wallet.action.stage);
 
   function updateDraft(field: keyof RuleDraft, value: string) {
@@ -756,13 +824,44 @@ function RuleDrawer({
         </header>
         <p className="drawer-note">
           {isNew
-            ? 'This creates a management-fee ceiling exit rule. VETO requests two owner transactions: one finite share approval and one bounded mandate. The server verifies the receipt before monitoring it.'
-            : 'This mandate is already consumed. Values below are read-only and come from the public real-Morpho run.'}
+            ? wallet.runtime?.guardVersion === 'v2'
+              ? 'One mandate, five optional depositor policy boundaries. VETO requests two owner transactions: one finite share approval and one bounded mandate. The server verifies the receipt and onchain mappings before monitoring.'
+              : 'This creates a management-fee ceiling exit rule (V1). VETO requests two owner transactions: one finite share approval and one bounded mandate. The server verifies the receipt before monitoring it.'
+            : 'This mandate is already consumed. Values below are read-only and come from the canonical Day 8 real-Morpho run.'}
         </p>
+        {isNew && wallet.position?.mandate?.active ? (
+          <div
+            style={{
+              margin: '0 0 1rem',
+              padding: '0.75rem',
+              background: 'rgba(255, 180, 0, 0.1)',
+              border: '1px solid rgba(255, 180, 0, 0.3)',
+              borderRadius: '6px',
+              color: '#fcd34d',
+              fontSize: '0.85rem',
+            }}
+          >
+            <strong style={{ display: 'block', marginBottom: '0.25rem', color: '#fbbf24' }}>
+              Active Mandate Detected (Migration Notice)
+            </strong>
+            <span>
+              An active mandate is already registered for this position. Arming a new mandate
+              replaces authorization in the guard, but please ensure previous allowances are managed
+              so two guards do not simultaneously authorize exits on the same shares.
+            </span>
+          </div>
+        ) : null}
         <form className="rule-form" onSubmit={(event) => event.preventDefault()}>
           <label>
             Rule type
-            <input value="Queued management fee above ceiling" readOnly />
+            <input
+              value={
+                wallet.runtime?.guardVersion === 'v2'
+                  ? 'Morpho Vault V2 Multi-Policy Boundaries'
+                  : 'Queued management fee above ceiling'
+              }
+              readOnly
+            />
           </label>
           <label>
             Vault address
@@ -799,13 +898,17 @@ function RuleDrawer({
 
             <div className="policy-section">
               <label>
-                Performance fee ceiling (%)
+                <strong>Performance fee ceiling (%)</strong>
                 <input
                   inputMode="decimal"
                   placeholder="e.g. 15.0"
                   readOnly={!isNew}
                   value={draft.performanceFeePercent ?? ''}
-                  onChange={(e) => updateDraft('performanceFeePercent', e.target.value)}
+                  onChange={(e) => {
+                    updateDraft('performanceFeePercent', e.target.value);
+                    if (e.target.value)
+                      setDraft((cur) => ({ ...cur, performanceFeeEnabled: true }));
+                  }}
                 />
                 <small>Fee charged on yield/performance, capped by protocol at 50%.</small>
               </label>
@@ -813,79 +916,169 @@ function RuleDrawer({
 
             <div className="policy-section">
               <label>
-                Relative cap ceiling (risk ID & max %)
-                <input
-                  placeholder="e.g. 0x..., max 25%"
-                  readOnly={!isNew}
-                  value={draft.relativeCaps?.[0]?.maxRelativeCapPercent ?? ''}
-                  onChange={(e) =>
-                    setDraft((cur) => ({
-                      ...cur,
-                      relativeCaps: [
-                        {
-                          riskId:
-                            '0x0000000000000000000000000000000000000000000000000000000000000000',
-                          maxRelativeCapPercent: e.target.value,
-                        },
-                      ],
-                    }))
-                  }
-                />
-                <small>
-                  Limits what the vault may permit for this risk ID; it does not claim current
-                  allocation equals the cap.
+                <strong>Relative cap ceilings (risk ID & max %)</strong>
+                <small style={{ display: 'block', marginBottom: '0.5rem' }}>
+                  Limits what the vault may permit for configured risk IDs; it does not claim
+                  current allocation equals the cap.
                 </small>
               </label>
+              {relativeCapRows.map((row, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    gap: '0.5rem',
+                    marginBottom: '0.5rem',
+                    alignItems: 'center',
+                  }}
+                >
+                  <input
+                    placeholder="Risk ID (0x... 32 bytes)"
+                    value={row.riskId}
+                    readOnly={!isNew}
+                    onChange={(e) => {
+                      const updated = [...relativeCapRows];
+                      updated[idx] = { ...updated[idx], riskId: e.target.value };
+                      setRelativeCapRows(updated);
+                      setDraft((cur) => ({
+                        ...cur,
+                        relativeCaps: updated,
+                        relativeCapEnabled: true,
+                      }));
+                    }}
+                    style={{ flex: 2, fontFamily: 'monospace', fontSize: '0.8rem' }}
+                  />
+                  <input
+                    placeholder="Max % (0-100)"
+                    value={row.maxRelativeCapPercent}
+                    readOnly={!isNew}
+                    onChange={(e) => {
+                      const updated = [...relativeCapRows];
+                      updated[idx] = { ...updated[idx], maxRelativeCapPercent: e.target.value };
+                      setRelativeCapRows(updated);
+                      setDraft((cur) => ({
+                        ...cur,
+                        relativeCaps: updated,
+                        relativeCapEnabled: true,
+                      }));
+                    }}
+                    style={{ flex: 1 }}
+                  />
+                  {isNew && (
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      style={{ padding: '0.25rem 0.5rem' }}
+                      onClick={() => {
+                        const updated = relativeCapRows.filter((_, i) => i !== idx);
+                        setRelativeCapRows(updated);
+                        setDraft((cur) => ({
+                          ...cur,
+                          relativeCaps: updated,
+                          relativeCapEnabled: updated.length > 0,
+                        }));
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              {isNew && (
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}
+                  onClick={() => {
+                    const updated = [...relativeCapRows, { riskId: '', maxRelativeCapPercent: '' }];
+                    setRelativeCapRows(updated);
+                    setDraft((cur) => ({
+                      ...cur,
+                      relativeCaps: updated,
+                      relativeCapEnabled: true,
+                    }));
+                  }}
+                >
+                  + Add Risk Cap Row
+                </button>
+              )}
             </div>
 
             <div className="policy-section">
               <label>
-                Approved adapters (allowlist)
+                <strong>Approved adapters (allowlist)</strong>
                 <input
                   placeholder="e.g. 0x1111... (comma-separated)"
                   readOnly={!isNew}
-                  value={draft.approvedAdapters?.join(', ') ?? ''}
-                  onChange={(e) =>
+                  value={adapterInput}
+                  onChange={(e) => {
+                    setAdapterInput(e.target.value);
+                    const parsed = e.target.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
                     setDraft((cur) => ({
                       ...cur,
-                      approvedAdapters: e.target.value
-                        .split(',')
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    }))
-                  }
+                      approvedAdapters: parsed,
+                      adapterAllowlistEnabled: true,
+                    }));
+                  }}
                 />
                 <small>
                   An added adapter becomes available to allocators; it does not mean capital has
-                  already moved.
+                  already moved. An empty allowlist strictly forbids any newly added adapters.
                 </small>
               </label>
             </div>
 
             <div className="policy-section">
               <label>
-                Approved redemption gates (allowlist)
+                <strong>Redemption gate allowlists</strong>
+              </label>
+              <label style={{ marginTop: '0.5rem' }}>
+                Approved send-shares gates
                 <input
                   placeholder="e.g. 0x3333... (comma-separated)"
                   readOnly={!isNew}
-                  value={draft.approvedSendSharesGates?.join(', ') ?? ''}
-                  onChange={(e) =>
+                  value={sendGateInput}
+                  onChange={(e) => {
+                    setSendGateInput(e.target.value);
+                    const parsed = e.target.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
                     setDraft((cur) => ({
                       ...cur,
-                      approvedSendSharesGates: e.target.value
-                        .split(',')
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                      approvedReceiveAssetsGates: e.target.value
-                        .split(',')
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    }))
-                  }
+                      approvedSendSharesGates: parsed,
+                      redemptionGateAllowlistEnabled: true,
+                    }));
+                  }}
                 />
                 <small>
-                  VETO reacts to a gate outside your approved configuration; it does not claim the
-                  gate is malicious. address(0) is implicitly safe.
+                  Authorized contracts to gate share redemptions. address(0) is implicitly accepted.
+                </small>
+              </label>
+              <label style={{ marginTop: '0.5rem' }}>
+                Approved receive-assets gates
+                <input
+                  placeholder="e.g. 0x4444... (comma-separated)"
+                  readOnly={!isNew}
+                  value={receiveGateInput}
+                  onChange={(e) => {
+                    setReceiveGateInput(e.target.value);
+                    const parsed = e.target.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setDraft((cur) => ({
+                      ...cur,
+                      approvedReceiveAssetsGates: parsed,
+                      redemptionGateAllowlistEnabled: true,
+                    }));
+                  }}
+                />
+                <small>
+                  Authorized contracts to gate asset transfers. address(0) is implicitly accepted.
                 </small>
               </label>
             </div>
