@@ -82,288 +82,6 @@ function StatusChip({ children, tone = 'neutral' }: { children: ReactNode; tone?
   return <span className={`status-chip status-${tone}`}>{children}</span>;
 }
 
-function LiveOwnerSurface({
-  wallet,
-  openNewRule,
-}: {
-  wallet: VetoWallet;
-  openNewRule: () => void;
-}) {
-  const shares = BigInt(wallet.position?.position.shares ?? '0');
-  const ownerConnected = Boolean(wallet.address);
-  const positionReady = Boolean(
-    wallet.address &&
-    wallet.runtime?.monitoringReady &&
-    wallet.position?.position.supported &&
-    shares > 0n,
-  );
-  const ruleActive = wallet.rules.some((rule) => rule.state === 'ACTIVE');
-  return (
-    <article className="live-owner-surface">
-      <div className="live-owner-copy">
-        <div className="live-owner-heading">
-          <span className={wallet.runtime?.monitoringReady ? 'readiness ready' : 'readiness'}>
-            <span /> {wallet.runtime?.monitoringReady ? 'Monitoring ready' : 'Checking runtime'}
-          </span>
-          {wallet.runtime ? <small>Block {wallet.runtime.latestBlock}</small> : null}
-        </div>
-        <h2>{wallet.address ? 'Your live exit-rule workspace' : 'Set a live exit rule.'}</h2>
-        {wallet.address && wallet.position ? (
-          <p>
-            <strong>
-              {wallet.position.position.sharesFormatted} {wallet.position.position.symbol}
-            </strong>{' '}
-            shares found in the configured supported vault at block{' '}
-            {wallet.position.observedAtBlock}.
-          </p>
-        ) : (
-          <p>
-            Connect the owner wallet to discover its supported vault shares and configure the first
-            implemented rule type: a management-fee ceiling. VETO never receives the private key.
-          </p>
-        )}
-      </div>
-      <div className="live-owner-actions">
-        {wallet.address ? (
-          <button
-            className="button button-primary"
-            disabled={!wallet.runtime?.monitoringReady || shares <= 0n}
-            onClick={openNewRule}
-            type="button"
-          >
-            {shares > 0n ? 'Set exit rule' : 'No supported shares'} <Icon name="arrow" />
-          </button>
-        ) : (
-          <button className="button button-primary" onClick={wallet.connect} type="button">
-            <Icon name="wallet" /> Connect owner wallet
-          </button>
-        )}
-        {wallet.position ? (
-          <ExternalLink href={explorerAddress(wallet.position.position.vault)}>
-            Inspect vault
-          </ExternalLink>
-        ) : null}
-        {wallet.address ? (
-          <button
-            className="button button-secondary"
-            disabled={wallet.loading}
-            onClick={() => void wallet.refresh()}
-            type="button"
-          >
-            {wallet.loading ? 'Refreshing…' : 'Refresh live state'}
-          </button>
-        ) : null}
-      </div>
-      <ol aria-label="Live exit rule setup" className="owner-flow">
-        <li className={ownerConnected ? 'done' : 'current'}>
-          <span>1</span>
-          <div>
-            <strong>Connect owner</strong>
-            <small>{ownerConnected ? 'Wallet connected' : 'Owner signature authority'}</small>
-          </div>
-        </li>
-        <li className={positionReady ? 'done' : ownerConnected ? 'current' : ''}>
-          <span>2</span>
-          <div>
-            <strong>Verify position</strong>
-            <small>{positionReady ? 'Vault and monitor ready' : 'Supported shares required'}</small>
-          </div>
-        </li>
-        <li className={ruleActive ? 'done' : positionReady ? 'current' : ''}>
-          <span>3</span>
-          <div>
-            <strong>Approve and arm</strong>
-            <small>{ruleActive ? 'Rule is monitored' : 'Two owner transactions'}</small>
-          </div>
-        </li>
-      </ol>
-    </article>
-  );
-}
-
-function Overview({
-  evidence,
-  openRule,
-  openNewRule,
-  wallet,
-}: {
-  evidence: Evidence;
-  openRule: () => void;
-  openNewRule: () => void;
-  wallet: VetoWallet;
-}) {
-  const recent = evidence.activity.slice(-3).reverse();
-
-  return (
-    <div className="view-enter">
-      <section className="page-intro">
-        <div>
-          <span className="overline">Depositor-controlled exits</span>
-          <h1>Your right to leave before the rules change.</h1>
-          <p>
-            Define when your approved position may remain in a managed vault. KeeperHub submits an
-            eligible exit; the guard independently rechecks your rule onchain before funds move.
-          </p>
-        </div>
-        <StatusChip>Execution-time enforced</StatusChip>
-      </section>
-
-      <div className="fixture-notice">
-        <span>Real Morpho V2 public proof</span>
-        <p>
-          Canonical Morpho Vault V2 code on Base Sepolia · valueless test asset · not a mainnet
-          withdrawal
-        </p>
-      </div>
-
-      <LiveOwnerSurface openNewRule={openNewRule} wallet={wallet} />
-
-      <section className="command-grid">
-        <article className="result-hero">
-          <Image
-            alt=""
-            className="result-art"
-            height={1024}
-            priority
-            src="/brand/veto-exit-path.png"
-            width={1536}
-          />
-          <div className="result-hero-top">
-            <span className="panel-label">Recorded return to owner</span>
-            <span className="result-seal">
-              <Image
-                alt="Completed bounded exit"
-                height={31}
-                src="/brand/veto-exit-emblem.png"
-                width={31}
-              />
-            </span>
-          </div>
-          <div className="asset-total">
-            <strong>{evidence.result.assetsReturned}</strong>
-            <span>{evidence.position.assetName}</span>
-          </div>
-          <div className="result-context">
-            <div>
-              <span>Exit headroom</span>
-              <strong>{evidence.proposal.leadTime}</strong>
-              <small>before fee eligibility</small>
-            </div>
-            <div>
-              <span>Owner shares</span>
-              <strong>{evidence.position.sharesAfter}</strong>
-              <small>after redemption</small>
-            </div>
-            <div>
-              <span>Guard balance</span>
-              <strong>{evidence.result.guardAssets}</strong>
-              <small>nothing retained</small>
-            </div>
-          </div>
-          <ExternalLink href={explorerTransaction(evidence.result.transactionHash)}>
-            Verify transaction
-          </ExternalLink>
-        </article>
-
-        <article className="surface rule-summary">
-          <div className="surface-heading">
-            <div>
-              <span className="panel-label">Implemented rule type</span>
-              <h2>Management fee ceiling</h2>
-            </div>
-            <StatusChip>Consumed</StatusChip>
-          </div>
-          <div className="threshold-visual" aria-label="One percent limit and two percent proposal">
-            <div className="threshold-numbers">
-              <span>
-                Owner limit <strong>{evidence.instruction.feeCeiling}</strong>
-              </span>
-              <span>
-                Proposed <strong>{evidence.proposal.proposedFee}</strong>
-              </span>
-            </div>
-            <div className="threshold-track">
-              <span className="limit-marker" />
-              <span className="proposal-marker" />
-            </div>
-            <div className="threshold-scale">
-              <span>0%</span>
-              <span>1%</span>
-              <span>2%</span>
-              <span>3%</span>
-            </div>
-          </div>
-          <p className="rule-copy">
-            The queued proposal crossed this owner&apos;s chosen ceiling. That is a policy
-            breach—not a claim of curator malice or imminent loss. The mandate authorized exactly{' '}
-            {evidence.instruction.shares} shares and fixed the receiver to the owner.
-          </p>
-          <button className="button button-secondary" onClick={openRule} type="button">
-            Review rule <Icon name="arrow" />
-          </button>
-        </article>
-      </section>
-
-      <section className="lower-grid">
-        <article className="surface position-surface">
-          <div className="surface-heading">
-            <div>
-              <span className="panel-label">Monitored position</span>
-              <h2>{evidence.position.assetName} Vault</h2>
-            </div>
-            <StatusChip tone="base">Base Sepolia</StatusChip>
-          </div>
-          <div className="position-row">
-            <div className="asset-glyph">VU</div>
-            <div className="position-main">
-              <strong>{evidence.position.assetName}</strong>
-              <ExternalLink href={explorerAddress(evidence.position.vault)}>
-                {shorten(evidence.position.vault, 10, 8)}
-              </ExternalLink>
-            </div>
-            <div className="position-stat">
-              <span>Before exit</span>
-              <strong>{evidence.position.sharesBefore}</strong>
-            </div>
-            <div className="position-stat">
-              <span>After exit</span>
-              <strong>{evidence.position.sharesAfter}</strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="surface activity-preview">
-          <div className="surface-heading">
-            <div>
-              <span className="panel-label">Latest activity</span>
-              <h2>Execution trail</h2>
-            </div>
-          </div>
-          <ol className="mini-timeline">
-            {recent.map((event) => (
-              <li key={event.transactionHash}>
-                <span className={`event-dot event-${event.kind}`} />
-                <div>
-                  <strong>{event.label}</strong>
-                  <small>Block {event.blockNumber}</small>
-                </div>
-                <ExternalLink href={explorerTransaction(event.transactionHash)}>View</ExternalLink>
-              </li>
-            ))}
-          </ol>
-        </article>
-      </section>
-      <aside className="liquidity-note">
-        <strong>Authorization is not a liquidity guarantee.</strong>
-        <p>
-          VETO can enforce when an exit is allowed. If the exact redemption cannot execute, the
-          transaction reverts and preserves the position; P0 does not attempt a partial exit.
-        </p>
-      </aside>
-    </div>
-  );
-}
-
 function PolicySummaryView({ config }: { config: Record<string, any> }) {
   const flags = BigInt(String(config.policyFlags ?? '0'));
   const hasMgmt = (flags & 1n) !== 0n;
@@ -373,388 +91,351 @@ function PolicySummaryView({ config }: { config: Record<string, any> }) {
   const hasGate = (flags & 16n) !== 0n;
 
   return (
-    <div
-      className="policy-summary-details"
-      style={{
-        marginTop: '0.75rem',
-        fontSize: '0.85rem',
-        lineHeight: '1.5',
-        background: 'rgba(15, 23, 42, 0.6)',
-        padding: '0.75rem',
-        borderRadius: '6px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-      }}
-    >
-      <div
-        style={{
-          fontWeight: 600,
-          color: '#93c5fd',
-          marginBottom: '0.5rem',
-          fontSize: '0.8rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-        }}
-      >
-        Verified Active Boundaries
-      </div>
-      {hasMgmt && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
-          <span style={{ color: '#94a3b8' }}>Management fee</span>
-          <strong style={{ color: '#f8fafc' }}>
-            ≤ {formatAnnualizedFee(BigInt(String(config.maxManagementFee ?? '0')))}
-          </strong>
-        </div>
-      )}
+    <div className="active-rule-summary-chips">
       {hasPerf && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
-          <span style={{ color: '#94a3b8' }}>Performance fee</span>
-          <strong style={{ color: '#f8fafc' }}>
-            ≤ {formatWadPercent(BigInt(String(config.maxPerformanceFee ?? '0')))}
-          </strong>
-        </div>
+        <span className="summary-chip">
+          Performance fee ≤ {formatWadPercent(BigInt(String(config.maxPerformanceFee ?? '0')))}
+        </span>
       )}
-      {hasCap && (
-        <div
-          style={{
-            marginTop: '0.4rem',
-            borderTop: '1px dashed rgba(255,255,255,0.06)',
-            paddingTop: '0.4rem',
-          }}
-        >
-          <span style={{ color: '#94a3b8' }}>Relative cap ceilings:</span>
-          {Array.isArray(config.relativeCaps) && config.relativeCaps.length > 0 ? (
-            config.relativeCaps.map((c: any, i: number) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  paddingLeft: '0.5rem',
-                  fontFamily: 'monospace',
-                  fontSize: '0.8rem',
-                  paddingTop: '2px',
-                }}
-              >
-                <span style={{ color: '#cbd5e1' }}>{shorten(String(c.riskId), 10, 6)}</span>
-                <strong style={{ color: '#f8fafc' }}>
-                  ≤ {formatWadPercent(BigInt(String(c.maxRelativeCap ?? '0')))}
-                </strong>
-              </div>
-            ))
-          ) : (
-            <div style={{ paddingLeft: '0.5rem', color: '#f87171' }}>None configured</div>
-          )}
-        </div>
+      {hasMgmt && (
+        <span className="summary-chip">
+          Management fee ≤ {formatAnnualizedFee(BigInt(String(config.maxManagementFee ?? '0')))}
+        </span>
       )}
+      {hasCap &&
+        Array.isArray(config.relativeCaps) &&
+        config.relativeCaps.length > 0 &&
+        config.relativeCaps.map((c: any, i: number) => (
+          <span className="summary-chip" key={i}>
+            Cap {shorten(String(c.riskId), 6, 4)} ≤{' '}
+            {formatWadPercent(BigInt(String(c.maxRelativeCap ?? '0')))}
+          </span>
+        ))}
       {hasAdapter && (
-        <div
-          style={{
-            marginTop: '0.4rem',
-            borderTop: '1px dashed rgba(255,255,255,0.06)',
-            paddingTop: '0.4rem',
-          }}
-        >
-          <span style={{ color: '#94a3b8' }}>Approved adapters:</span>
-          {Array.isArray(config.approvedAdapters) && config.approvedAdapters.length > 0 ? (
-            config.approvedAdapters.map((a: string, i: number) => (
-              <div
-                key={i}
-                style={{
-                  paddingLeft: '0.5rem',
-                  fontFamily: 'monospace',
-                  fontSize: '0.8rem',
-                  color: '#cbd5e1',
-                  paddingTop: '2px',
-                }}
-              >
-                {shorten(a, 10, 6)}
-              </div>
-            ))
-          ) : (
-            <div style={{ paddingLeft: '0.5rem', color: '#f59e0b', fontSize: '0.8rem' }}>
-              None (Strict: no new adapter approved)
-            </div>
-          )}
-        </div>
+        <span className="summary-chip">
+          {Array.isArray(config.approvedAdapters) && config.approvedAdapters.length > 0
+            ? `${config.approvedAdapters.length} approved adapters`
+            : 'Strict adapter allowlist'}
+        </span>
       )}
-      {hasGate && (
-        <div
-          style={{
-            marginTop: '0.4rem',
-            borderTop: '1px dashed rgba(255,255,255,0.06)',
-            paddingTop: '0.4rem',
-          }}
-        >
-          <span style={{ color: '#94a3b8' }}>Approved redemption gates:</span>
-          <div style={{ paddingLeft: '0.5rem', marginTop: '2px' }}>
-            <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Send-shares:</div>
-            {Array.isArray(config.approvedSendSharesGates) &&
-            config.approvedSendSharesGates.length > 0 ? (
-              config.approvedSendSharesGates.map((g: string, i: number) => (
-                <div
-                  key={i}
-                  style={{
-                    paddingLeft: '0.5rem',
-                    fontFamily: 'monospace',
-                    fontSize: '0.75rem',
-                    color: '#cbd5e1',
-                  }}
-                >
-                  {shorten(g, 10, 6)}
-                </div>
-              ))
-            ) : (
-              <div style={{ paddingLeft: '0.5rem', color: '#f59e0b', fontSize: '0.75rem' }}>
-                None beyond address(0)
-              </div>
-            )}
-            <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '2px' }}>
-              Receive-assets:
-            </div>
-            {Array.isArray(config.approvedReceiveAssetsGates) &&
-            config.approvedReceiveAssetsGates.length > 0 ? (
-              config.approvedReceiveAssetsGates.map((g: string, i: number) => (
-                <div
-                  key={i}
-                  style={{
-                    paddingLeft: '0.5rem',
-                    fontFamily: 'monospace',
-                    fontSize: '0.75rem',
-                    color: '#cbd5e1',
-                  }}
-                >
-                  {shorten(g, 10, 6)}
-                </div>
-              ))
-            ) : (
-              <div style={{ paddingLeft: '0.5rem', color: '#f59e0b', fontSize: '0.75rem' }}>
-                None beyond address(0)
-              </div>
-            )}
+      {hasGate && <span className="summary-chip">Approved gates</span>}
+    </div>
+  );
+}
+
+function Overview({
+  evidence,
+  openNewRule,
+  wallet,
+  setView,
+}: {
+  evidence: Evidence;
+  openNewRule: () => void;
+  wallet: VetoWallet;
+  setView: (view: View) => void;
+}) {
+  const liveRule = wallet.rules.find((rule) => rule.state === 'ACTIVE');
+
+  if (!wallet.address) {
+    return (
+      <div className="view-enter disconnected-hero">
+        <span className="brand-badge">VETO</span>
+        <h1>Your right to leave before the rules change.</h1>
+        <p>
+          Set the conditions under which your Morpho position is allowed to stay. If a queued vault
+          change crosses your boundary, VETO can execute your pre-authorized exit.
+        </p>
+        <div className="hero-actions">
+          <button className="button button-primary" onClick={wallet.connect} type="button">
+            <Icon name="wallet" /> Connect wallet
+          </button>
+          <button className="button button-ghost" onClick={() => setView('evidence')} type="button">
+            View public proof →
+          </button>
+        </div>
+        <span className="hero-subline">
+          Built for Morpho Vault V2 · Execution through KeeperHub
+        </span>
+      </div>
+    );
+  }
+
+  const shares = wallet.position?.position.sharesFormatted ?? '0';
+  const shareSymbol = wallet.position?.position.shareSymbol ?? 'shares';
+  const assets = wallet.position?.position.assetsFormatted ?? '0';
+  const assetSymbol = wallet.position?.position.assetSymbol ?? 'USDC';
+  const vaultName = wallet.position?.position.symbol
+    ? `${wallet.position.position.symbol} Vault`
+    : 'Supported Morpho Vault';
+
+  return (
+    <div className="view-enter connected-overview">
+      <article className="surface position-card">
+        <div className="position-card-top">
+          <div>
+            <span className="panel-label">Your position</span>
+            <h2>{vaultName}</h2>
+          </div>
+          <button className="button button-primary" onClick={openNewRule} type="button">
+            Set exit rule
+          </button>
+        </div>
+        <div className="position-card-balance">
+          <div className="balance-main">
+            <strong>{shares}</strong>
+            <span>{shareSymbol}</span>
+          </div>
+          <div className="balance-approx">
+            ≈ {assets} {assetSymbol}
           </div>
         </div>
+      </article>
+
+      {liveRule ? (
+        <article className="surface active-protection-card">
+          <div className="surface-heading">
+            <div>
+              <span className="panel-label">Active protection</span>
+              <h2>Protection active</h2>
+            </div>
+            <StatusChip tone="verified">Watching</StatusChip>
+          </div>
+
+          <div style={{ margin: '14px 0' }}>
+            {liveRule.policy_config_json ? (
+              <PolicySummaryView config={liveRule.policy_config_json} />
+            ) : (
+              <span className="summary-chip">
+                Management fee ≤{' '}
+                {liveRule.max_fee_per_second
+                  ? formatAnnualizedFee(BigInt(liveRule.max_fee_per_second))
+                  : '1.00%'}
+              </span>
+            )}
+          </div>
+
+          <div className="protection-meta-grid">
+            <div>
+              <span>Shares protected</span>
+              <strong>{shares}</strong>
+            </div>
+            <div>
+              <span>Minimum return</span>
+              <strong>
+                {assets} {assetSymbol}
+              </strong>
+            </div>
+            <div>
+              <span>Expires</span>
+              <strong>7 days</strong>
+            </div>
+            <div>
+              <span>Status</span>
+              <strong style={{ color: 'var(--blue)' }}>Watching</strong>
+            </div>
+          </div>
+
+          <div style={{ marginTop: '16px' }}>
+            <button
+              className="button button-danger"
+              disabled={wallet.action.stage === 'cancelling'}
+              onClick={() => void wallet.cancelRule(liveRule.mandate_id)}
+              type="button"
+            >
+              Cancel rule
+            </button>
+          </div>
+        </article>
+      ) : (
+        <article className="surface empty-protection-card">
+          <h2>No exit rule yet</h2>
+          <p>Choose the changes that should trigger your exit.</p>
+          <button className="button button-primary" onClick={openNewRule} type="button">
+            Set exit rule
+          </button>
+        </article>
       )}
     </div>
   );
 }
 
-function Rules({
-  evidence,
-  openRule,
-  openNewRule,
-  wallet,
-}: {
-  evidence: Evidence;
-  openRule: () => void;
-  openNewRule: () => void;
-  wallet: VetoWallet;
-}) {
+function Rules({ openNewRule, wallet }: { openNewRule: () => void; wallet: VetoWallet }) {
   const liveRule = wallet.rules.find((rule) => rule.state === 'ACTIVE');
+
+  if (!wallet.address) {
+    return (
+      <div className="view-enter">
+        <section className="page-intro">
+          <div>
+            <h1>Exit rules</h1>
+            <p>Connect your wallet to view exit rules.</p>
+          </div>
+        </section>
+        <article className="surface empty-protection-card">
+          <button className="button button-primary" onClick={wallet.connect} type="button">
+            <Icon name="wallet" /> Connect wallet
+          </button>
+        </article>
+      </div>
+    );
+  }
+
+  if (!liveRule) {
+    return (
+      <div className="view-enter">
+        <section className="page-intro">
+          <div>
+            <h1>Exit rules</h1>
+            <p>You haven&apos;t set an exit rule for this position.</p>
+          </div>
+        </section>
+        <article className="surface empty-protection-card">
+          <h2>No exit rule yet</h2>
+          <p>Choose the changes that should trigger your exit.</p>
+          <button className="button button-primary" onClick={openNewRule} type="button">
+            Set exit rule
+          </button>
+        </article>
+      </div>
+    );
+  }
+
+  const shares = wallet.position?.position.sharesFormatted ?? '10';
+  const assets = wallet.position?.position.assetsFormatted ?? '9.5';
+  const assetSymbol = wallet.position?.position.assetSymbol ?? 'USD';
+
   return (
     <div className="view-enter">
       <section className="page-intro page-intro-action">
         <div>
-          <span className="overline">Owner mandates</span>
           <h1>Exit rules</h1>
-          <p>
-            {wallet.runtime?.guardVersion === 'v2'
-              ? 'One mandate, five optional depositor policy boundaries. Pre-authorized conditional exits for queued Morpho Vault V2 governance changes.'
-              : 'Owner-defined conditions for continued participation. Implemented rule type: queued management-fee ceiling (V1).'}
-          </p>
         </div>
-        <button className="button button-primary" onClick={openNewRule} type="button">
-          <Icon name="plus" /> New exit rule
+        <button className="button button-secondary" onClick={openNewRule} type="button">
+          Update exit rule
         </button>
       </section>
-      <article className="surface live-rule-record">
+
+      <article className="surface active-protection-card">
         <div className="surface-heading">
           <div>
-            <span className="panel-label">Connected owner</span>
-            <h2>{liveRule ? `Active mandate ${liveRule.mandate_id}` : 'No active live mandate'}</h2>
+            <span className="status-chip status-verified">ACTIVE</span>
+            <h2 style={{ marginTop: '0.5rem' }}>
+              {wallet.position?.position.symbol
+                ? `${wallet.position.position.symbol} Vault`
+                : 'Demo Vault'}
+            </h2>
           </div>
-          <StatusChip tone={liveRule ? 'verified' : 'neutral'}>
-            {liveRule ? (liveRule.execution_state ?? 'Monitoring') : 'Not armed'}
-          </StatusChip>
         </div>
-        {wallet.address ? (
-          <div className="live-rule-body">
-            <p>
-              {liveRule
-                ? `The database and chain agree on an owner-bound rule for ${shorten(liveRule.vault_address, 10, 8)}.`
-                : 'The connected address has no rule registered with this VETO runtime.'}
-            </p>
-            {liveRule && (
-              <div style={{ margin: '0.75rem 0', fontSize: '0.875rem' }}>
-                {liveRule.guard_version === 'v2' ? (
-                  <div>
-                    <span
-                      style={{
-                        background: '#2563eb',
-                        color: '#fff',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                      }}
-                    >
-                      V2 Multi-Policy
-                    </span>
-                    {liveRule.policy_config_json ? (
-                      <PolicySummaryView config={liveRule.policy_config_json} />
-                    ) : null}
-                  </div>
-                ) : (
-                  <span
-                    style={{
-                      background: '#475569',
-                      color: '#fff',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem',
-                    }}
-                  >
-                    V1 Management Fee Ceiling
-                  </span>
-                )}
-              </div>
-            )}
-            {liveRule ? (
-              <button
-                className="button button-danger"
-                disabled={wallet.action.stage === 'cancelling'}
-                onClick={() => void wallet.cancelRule(liveRule.mandate_id)}
-                type="button"
-              >
-                Cancel rule in owner wallet
-              </button>
-            ) : (
-              <button className="button button-secondary" onClick={openNewRule} type="button">
-                Prepare owner rule
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="live-rule-body">
-            <p>Connect the owner wallet to load live rules and cancellation authority.</p>
-            <button className="button button-secondary" onClick={wallet.connect} type="button">
-              Connect wallet
-            </button>
-          </div>
-        )}
-        {wallet.action.stage !== 'idle' ? (
-          <div className={`action-message action-${wallet.action.stage}`} aria-live="polite">
-            {wallet.action.message}
-          </div>
-        ) : null}
-      </article>
-      <div className="recorded-divider">
-        <span>Recorded public evidence</span>
-      </div>
-      <article className="surface rule-record">
-        <div className="rule-record-top">
-          <div className="rule-identity">
-            <span className="rule-index">01</span>
-            <div>
-              <span className="panel-label">Implemented rule · management fee ceiling</span>
-              <h2>Exit above {evidence.instruction.feeCeiling}</h2>
-            </div>
-          </div>
-          <StatusChip>Consumed by exit</StatusChip>
+
+        <div style={{ margin: '14px 0' }}>
+          {liveRule.policy_config_json ? (
+            <PolicySummaryView config={liveRule.policy_config_json} />
+          ) : (
+            <span className="summary-chip">
+              Management fee ≤{' '}
+              {liveRule.max_fee_per_second
+                ? formatAnnualizedFee(BigInt(liveRule.max_fee_per_second))
+                : '1.00%'}
+            </span>
+          )}
         </div>
-        <div className="rule-fields">
+
+        <div className="protection-meta-grid">
           <div>
-            <span>Vault</span>
-            <strong>{shorten(evidence.position.vault, 10, 8)}</strong>
-          </div>
-          <div>
-            <span>Shares authorized</span>
-            <strong>{evidence.instruction.shares}</strong>
+            <span>Shares protected</span>
+            <strong>{shares}</strong>
           </div>
           <div>
             <span>Minimum return</span>
-            <strong>{evidence.instruction.minimumReturn}</strong>
+            <strong>
+              {assets} {assetSymbol}
+            </strong>
           </div>
           <div>
-            <span>Safety window</span>
-            <strong>{evidence.instruction.safetyWindow}</strong>
-          </div>
-          <div>
-            <span>Expiry</span>
-            <strong>{evidence.instruction.expiresAt}</strong>
+            <span>Expires</span>
+            <strong>7 days</strong>
           </div>
         </div>
-        <div className="rule-actions">
-          <button className="button button-secondary" onClick={openRule} type="button">
-            Full rule details
+
+        <div style={{ marginTop: '16px' }}>
+          <button
+            className="button button-danger"
+            disabled={wallet.action.stage === 'cancelling'}
+            onClick={() => void wallet.cancelRule(liveRule.mandate_id)}
+            type="button"
+          >
+            Cancel rule
           </button>
-          <ExternalLink href={explorerTransaction(evidence.proposal.transactionHash)}>
-            Source proposal
-          </ExternalLink>
         </div>
       </article>
-      <aside className="empty-guidance">
-        <div className="guidance-icon">
-          <Icon name="route" />
-        </div>
-        <div>
-          <strong>Rules are owner-bound</strong>
-          <p>
-            KeeperHub submits an eligible call, but the guard decides whether it can succeed at
-            execution time. It fixes the receiver, shares, fee ceiling, minimum return, expiry, and
-            cancellation authority. VETO exits the owner; it does not cancel Morpho governance.
-          </p>
-        </div>
-      </aside>
     </div>
   );
 }
 
-function Activity({ evidence }: { evidence: Evidence }) {
+function Activity({ wallet, setView }: { wallet: VetoWallet; setView: (view: View) => void }) {
+  if (!wallet.address) {
+    return (
+      <div className="view-enter">
+        <section className="page-intro">
+          <div>
+            <h1>Activity</h1>
+            <p>Connect your wallet to view activity.</p>
+          </div>
+        </section>
+        <article className="surface empty-protection-card">
+          <button className="button button-primary" onClick={wallet.connect} type="button">
+            <Icon name="wallet" /> Connect wallet
+          </button>
+          <div style={{ marginTop: '16px' }}>
+            <button
+              className="button button-ghost"
+              onClick={() => setView('evidence')}
+              type="button"
+            >
+              View public execution history →
+            </button>
+          </div>
+        </article>
+      </div>
+    );
+  }
+
   return (
     <div className="view-enter">
       <section className="page-intro">
         <div>
-          <span className="overline">Recorded on-chain history</span>
           <h1>Activity</h1>
-          <p>
-            {evidence.activity.length} KeeperHub-submitted transactions from canonical deployment
-            through the verified exit.
-          </p>
+          <p>Recent activity for {shorten(wallet.address)}</p>
         </div>
-        <StatusChip tone="verified">{evidence.activity.length} confirmed</StatusChip>
       </section>
-      <article className="surface activity-log">
-        {evidence.activity
-          .slice()
-          .reverse()
-          .map((event, index) => (
-            <a
-              className="activity-row"
-              href={explorerTransaction(event.transactionHash)}
-              key={event.transactionHash}
-              rel="noreferrer"
-              target="_blank"
-            >
-              <div className={`activity-icon event-${event.kind}`}>
-                <Icon
-                  name={
-                    event.kind === 'result' ? 'check' : event.kind === 'trigger' ? 'pulse' : 'clock'
-                  }
-                />
+
+      {wallet.rules.length > 0 ? (
+        <article className="surface activity-log">
+          {wallet.rules.map((rule) => (
+            <div className="activity-row" key={rule.mandate_id}>
+              <div className="activity-icon event-result">
+                <Icon name="check" />
               </div>
               <div className="activity-copy">
-                <strong>{event.label}</strong>
-                <span>{shorten(event.transactionHash, 12, 8)}</span>
+                <strong>Exit rule armed</strong>
+                <span>
+                  Mandate #{rule.mandate_id} · {rule.state}
+                </span>
               </div>
               <div className="activity-meta">
-                <span>Block {event.blockNumber}</span>
-                <small>{event.gasUsed} gas</small>
+                <span>{shorten(rule.arm_transaction_hash, 8, 6)}</span>
               </div>
-              <Icon name="external" />
-              {index === 0 ? <span className="latest-marker">Latest</span> : null}
-            </a>
+            </div>
           ))}
-      </article>
+        </article>
+      ) : (
+        <article className="surface empty-protection-card">
+          <p>No recent activity for this address.</p>
+          <button className="button button-ghost" onClick={() => setView('evidence')} type="button">
+            View public execution history →
+          </button>
+        </article>
+      )}
     </div>
   );
 }
@@ -764,11 +445,10 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
     <div className="view-enter">
       <section className="page-intro">
         <div>
-          <span className="overline">Public verification</span>
           <h1>Evidence</h1>
-          <p>Use the chain receipt—not this interface—as the final source of truth.</p>
+          <p>Use the onchain receipt as the final source of truth.</p>
         </div>
-        <StatusChip tone="verified">Two public outcomes</StatusChip>
+        <StatusChip tone="verified">Public execution</StatusChip>
       </section>
       <section className="evidence-grid">
         <article className="surface evidence-facts">
@@ -781,62 +461,41 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
           </p>
           <dl>
             <div>
-              <dt>LIVE MAINNET READ</dt>
+              <dt>Live mainnet read</dt>
               <dd>Read-only state verification (0x050c…56f0, timelock 3.0d)</dd>
             </div>
             <div>
-              <dt>PINNED FORK</dt>
+              <dt>Pinned fork proof</dt>
               <dd>Simulation of real depositor exit ($3.07M USDC)</dd>
             </div>
             <div>
-              <dt>PUBLIC TESTNET EXECUTION</dt>
+              <dt>Public testnet execution</dt>
               <dd>Live KeeperHub transaction with test token</dd>
             </div>
             <div>
-              <dt>Fund Safety</dt>
-              <dd>VETO does not hold or move mainnet depositor funds without authorization</dd>
+              <dt>Fund safety</dt>
+              <dd>Zero custody: funds redeem directly to owner</dd>
             </div>
           </dl>
           <ExternalLink href="https://basescan.org/address/0x050cE30b927Da55177A4914EC73480238BAD56f0">
             Open Gauntlet USDC Prime on Basescan
           </ExternalLink>
         </article>
+
         <article className="surface evidence-facts">
-          <span className="panel-label">Contract provenance</span>
-          <h2>Canonical Morpho runtime</h2>
-          <p>
-            Unmodified Morpho Vault V2 release {evidence.source.release}, pinned to commit{' '}
-            {shorten(evidence.source.commit, 12, 8)}. The factory runtime hash exactly matches
-            Morpho&apos;s canonical Base deployment.
-          </p>
-          <dl>
-            <div>
-              <dt>Factory</dt>
-              <dd>{shorten(evidence.position.factory, 12, 8)}</dd>
-            </div>
-            <div>
-              <dt>Vault</dt>
-              <dd>{shorten(evidence.position.vault, 12, 8)}</dd>
-            </div>
-            <div>
-              <dt>Factory recognition</dt>
-              <dd>isVaultV2 = true</dd>
-            </div>
-          </dl>
-          <ExternalLink href={explorerAddress(evidence.position.vault)}>
-            Open Morpho V2 vault
-          </ExternalLink>
-        </article>
-        <article className="surface evidence-facts">
-          <span className="panel-label">Exit receipt (Day 8 conditional)</span>
+          <span className="panel-label">Public execution</span>
           <h2>KeeperHub conditional execution</h2>
+          <p>
+            Morpho proposal queued above fee ceiling. KeeperHub verified the condition onchain and
+            executed VetoExitGuard to redeem shares directly to the owner.
+          </p>
           <dl>
             <div>
               <dt>Status</dt>
               <dd>Success ({evidence.result.state})</dd>
             </div>
             <div>
-              <dt>KeeperHub ID</dt>
+              <dt>KeeperHub execution ID</dt>
               <dd>{evidence.result.executionId}</dd>
             </div>
             <div>
@@ -853,20 +512,17 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
               <dt>Mandate consumed</dt>
               <dd>Yes (single-use enforced)</dd>
             </div>
-            <div>
-              <dt>Historical direct proof</dt>
-              <dd>{evidence.result.historicalDirectExecutionId}</dd>
-            </div>
           </dl>
           <ExternalLink href={explorerTransaction(evidence.result.transactionHash)}>
             Open Blockscout receipt
           </ExternalLink>
         </article>
+
         <article className="surface evidence-facts">
-          <span className="panel-label">Conditional false (Day 8 safe block)</span>
-          <h2>Revocation held without broadcast</h2>
+          <span className="panel-label">Safe revocation</span>
+          <h2>Zero broadcast on curator revocation</h2>
           <p>
-            The 2% proposal was revoked onchain by the curator. KeeperHub read executableAt = 0,
+            When a proposal was revoked onchain by the curator, KeeperHub read executableAt = 0,
             evaluated condition false, and safely withheld execution with zero financial broadcast.
           </p>
           <dl>
@@ -890,50 +546,72 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
               <dt>Mandate</dt>
               <dd>{evidence.revokedProposal.mandateStillActive ? 'Still active' : 'Consumed'}</dd>
             </div>
-            <div>
-              <dt>Worker state</dt>
-              <dd>{evidence.revokedProposal.workerState}</dd>
-            </div>
           </dl>
           <ExternalLink href={explorerTransaction(evidence.revokedProposal.curatorRevocationTx)}>
             Open curator revocation tx
           </ExternalLink>
         </article>
+
+        <article className="surface evidence-facts">
+          <span className="panel-label">Historical proof</span>
+          <h2>Canonical Morpho runtime</h2>
+          <p>
+            Unmodified Morpho Vault V2 release {evidence.source.release}, pinned to commit{' '}
+            {shorten(evidence.source.commit, 12, 8)}. The factory runtime hash exactly matches
+            Morpho&apos;s canonical Base deployment.
+          </p>
+          <dl>
+            <div>
+              <dt>Factory</dt>
+              <dd>{shorten(evidence.position.factory, 12, 8)}</dd>
+            </div>
+            <div>
+              <dt>Vault</dt>
+              <dd>{shorten(evidence.position.vault, 12, 8)}</dd>
+            </div>
+            <div>
+              <dt>Historical V1 proof</dt>
+              <dd>{evidence.result.historicalDirectExecutionId}</dd>
+            </div>
+          </dl>
+          <ExternalLink href={explorerAddress(evidence.position.vault)}>
+            Open Morpho V2 vault
+          </ExternalLink>
+        </article>
       </section>
-      <div className="truth-statement">
-        <strong>Execution-time enforcement</strong>
-        <p>
-          One public run exits while the rule remains true. The second preserves every share when
-          the proposal is revoked. Together they show that execution depends on current Morpho
-          state, not a stale alert. The asset remains a valueless test token.
-        </p>
-      </div>
     </div>
   );
 }
 
 function RuleDrawer({
-  evidence,
   mode,
   close,
   wallet,
 }: {
-  evidence: Evidence;
   mode: 'review' | 'new';
   close: () => void;
   wallet: VetoWallet;
 }) {
-  const isNew = mode === 'new';
-  const armTransaction = evidence.activity.find((entry) => entry.label === 'Exit rule armed');
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  const initialShares =
+    wallet.position?.position.sharesFormatted && wallet.position.position.sharesFormatted !== '0'
+      ? wallet.position.position.sharesFormatted
+      : '10';
+  const initialMinAssets =
+    wallet.position?.position.assetsFormatted && wallet.position.position.assetsFormatted !== '0'
+      ? wallet.position.position.assetsFormatted
+      : '9.5';
+
   const [draft, setDraft] = useState<RuleDraft>({
     feePercent: '1.00',
-    shares: wallet.position?.position.sharesFormatted ?? evidence.instruction.shares,
-    minimumReturn: wallet.position?.position.assetsFormatted ?? evidence.instruction.minimumReturn,
-    expiresHours: '24',
+    shares: initialShares,
+    minimumReturn: initialMinAssets,
+    expiresHours: '168', // 7 days
     safetyMinutes: '5',
-    managementFeeEnabled: true,
-    performanceFeeEnabled: false,
-    performanceFeePercent: '',
+    managementFeeEnabled: false,
+    performanceFeeEnabled: true, // Performance fee checked by default for demo!
+    performanceFeePercent: '10',
     relativeCapEnabled: false,
     relativeCaps: [],
     adapterAllowlistEnabled: false,
@@ -942,16 +620,68 @@ function RuleDrawer({
     approvedSendSharesGates: [],
     approvedReceiveAssetsGates: [],
   });
-  const [relativeCapRows, setRelativeCapRows] = useState<
-    Array<{ riskId: string; maxRelativeCapPercent: string }>
-  >([]);
+
+  const [relativeCapRiskId, setRelativeCapRiskId] = useState('');
+  const [relativeCapPercent, setRelativeCapPercent] = useState('20');
   const [adapterInput, setAdapterInput] = useState('');
   const [sendGateInput, setSendGateInput] = useState('');
   const [receiveGateInput, setReceiveGateInput] = useState('');
-  const working = ['approving', 'arming', 'registering'].includes(wallet.action.stage);
 
-  function updateDraft(field: keyof RuleDraft, value: string) {
-    setDraft((current) => ({ ...current, [field]: value }));
+  const working = ['approving', 'arming', 'registering'].includes(wallet.action.stage);
+  const complete = wallet.action.stage === 'complete';
+  const error = wallet.action.stage === 'error';
+
+  const shareSymbol = wallet.position?.position.shareSymbol ?? 'shares';
+  const assetSymbol = wallet.position?.position.assetSymbol ?? 'USDC';
+
+  const hasAnyPolicyEnabled = Boolean(
+    draft.managementFeeEnabled ||
+    draft.performanceFeeEnabled ||
+    draft.relativeCapEnabled ||
+    draft.adapterAllowlistEnabled ||
+    draft.redemptionGateAllowlistEnabled,
+  );
+
+  function handleAddRelativeCap() {
+    if (!relativeCapRiskId.trim()) return;
+    setDraft((cur) => ({
+      ...cur,
+      relativeCaps: [
+        ...(cur.relativeCaps ?? []),
+        { riskId: relativeCapRiskId.trim(), maxRelativeCapPercent: relativeCapPercent },
+      ],
+    }));
+    setRelativeCapRiskId('');
+  }
+
+  function handleAddAdapter() {
+    if (!adapterInput.trim()) return;
+    setDraft((cur) => ({
+      ...cur,
+      approvedAdapters: [...(cur.approvedAdapters ?? []), adapterInput.trim()],
+    }));
+    setAdapterInput('');
+  }
+
+  function handleAddSendGate() {
+    if (!sendGateInput.trim()) return;
+    setDraft((cur) => ({
+      ...cur,
+      approvedSendSharesGates: [...(cur.approvedSendSharesGates ?? []), sendGateInput.trim()],
+    }));
+    setSendGateInput('');
+  }
+
+  function handleAddReceiveGate() {
+    if (!receiveGateInput.trim()) return;
+    setDraft((cur) => ({
+      ...cur,
+      approvedReceiveAssetsGates: [
+        ...(cur.approvedReceiveAssetsGates ?? []),
+        receiveGateInput.trim(),
+      ],
+    }));
+    setReceiveGateInput('');
   }
 
   return (
@@ -968,11 +698,10 @@ function RuleDrawer({
       >
         <header>
           <div>
-            <span className="overline">{isNew ? 'Prepare mandate' : 'Mandate 0'}</span>
-            <h2 id="drawer-title">{isNew ? 'New exit rule' : 'Recorded exit rule'}</h2>
+            <h2 id="drawer-title">Set exit rule</h2>
           </div>
           <button
-            aria-label="Close rule details"
+            aria-label="Close"
             autoFocus
             className="icon-button"
             onClick={close}
@@ -981,559 +710,582 @@ function RuleDrawer({
             <Icon name="close" />
           </button>
         </header>
-        <p className="drawer-note">
-          {isNew
-            ? wallet.runtime?.guardVersion === 'v2'
-              ? 'One mandate, five optional depositor policy boundaries. VETO requests two owner transactions: one finite share approval and one bounded mandate. The server verifies the receipt and onchain mappings before monitoring.'
-              : 'This creates a management-fee ceiling exit rule (V1). VETO requests two owner transactions: one finite share approval and one bounded mandate. The server verifies the receipt before monitoring it.'
-            : 'This mandate is already consumed. Values below are read-only and come from the canonical Day 8 real-Morpho run.'}
-        </p>
-        {isNew && wallet.position?.mandate?.active ? (
-          <div
-            style={{
-              margin: '0 0 1rem',
-              padding: '0.75rem',
-              background: 'rgba(255, 180, 0, 0.1)',
-              border: '1px solid rgba(255, 180, 0, 0.3)',
-              borderRadius: '6px',
-              color: '#fcd34d',
-              fontSize: '0.85rem',
-            }}
-          >
-            <strong style={{ display: 'block', marginBottom: '0.25rem', color: '#fbbf24' }}>
-              Active Mandate Detected (Separate Guard Notice)
-            </strong>
-            <span>
-              An active mandate is already active on this position. V1 and V2 operate under separate
-              guard contracts; arming a V2 mandate does not automatically cancel an authorization in
-              the V1 guard. For clean demo operation, use a fresh depositor position or cancel the
-              prior mandate to avoid concurrent share allowances.
-            </span>
+
+        {/* 3-Step Pill Bar */}
+        <div className="drawer-step-indicator">
+          <div className={`step-pill ${step === 1 ? 'active' : step > 1 ? 'completed' : ''}`}>
+            1 Protection
           </div>
-        ) : null}
-        <form className="rule-form" onSubmit={(event) => event.preventDefault()}>
-          <label>
-            Rule type
-            <input
-              value={
-                wallet.runtime?.guardVersion === 'v2'
-                  ? 'Morpho Vault V2 Multi-Policy Boundaries'
-                  : 'Queued management fee above ceiling'
+          <div className={`step-pill ${step === 2 ? 'active' : step > 2 ? 'completed' : ''}`}>
+            2 Exit details
+          </div>
+          <div className={`step-pill ${step === 3 ? 'active' : ''}`}>3 Review</div>
+        </div>
+
+        {/* STEP 1: Choose protection */}
+        {step === 1 && (
+          <div className="step-container">
+            <h3
+              style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px', color: 'var(--ink)' }}
+            >
+              What changes should make you exit?
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 16px' }}>
+              5 policy families supported
+            </p>
+
+            {/* Performance Fee (Demo-First) */}
+            <div
+              className={`policy-card-selectable ${draft.performanceFeeEnabled ? 'selected' : ''}`}
+              onClick={() =>
+                setDraft((cur) => ({ ...cur, performanceFeeEnabled: !cur.performanceFeeEnabled }))
               }
-              readOnly
-            />
-          </label>
-          <label>
-            Vault address
-            <input value={wallet.position?.position.vault ?? evidence.position.vault} readOnly />
-          </label>
-
-          <div className="form-grid">
-            <label>
-              Shares to exit ({wallet.position?.position.shareSymbol ?? 'shares'})
-              <input
-                onChange={(event) => updateDraft('shares', event.target.value)}
-                inputMode="decimal"
-                readOnly={!isNew}
-                value={isNew ? draft.shares : evidence.instruction.shares}
-              />
-            </label>
-            <label>
-              Minimum return ({wallet.position?.position.assetSymbol ?? 'assets'})
-              <input
-                onChange={(event) => updateDraft('minimumReturn', event.target.value)}
-                inputMode="decimal"
-                readOnly={!isNew}
-                value={isNew ? draft.minimumReturn : evidence.instruction.minimumReturn}
-              />
-            </label>
-          </div>
-
-          <div className="form-grid">
-            <label>
-              Safety window (minutes)
-              <input
-                onChange={(event) => updateDraft('safetyMinutes', event.target.value)}
-                inputMode="decimal"
-                readOnly={!isNew}
-                value={isNew ? draft.safetyMinutes : evidence.instruction.safetyWindow}
-              />
-            </label>
-            {isNew ? (
-              <label>
-                Rule expires after (hours)
+            >
+              <div className="policy-card-header">
                 <input
-                  inputMode="numeric"
-                  onChange={(event) => updateDraft('expiresHours', event.target.value)}
-                  value={draft.expiresHours}
+                  type="checkbox"
+                  checked={draft.performanceFeeEnabled ?? false}
+                  onChange={(e) =>
+                    setDraft((cur) => ({ ...cur, performanceFeeEnabled: e.target.checked }))
+                  }
+                  onClick={(e) => e.stopPropagation()}
                 />
-              </label>
-            ) : null}
-          </div>
-
-          {wallet.runtime?.guardVersion === 'v2' ? (
-            <div className="policy-boundaries-container" style={{ margin: '1rem 0' }}>
-              <span className="overline" style={{ color: '#93c5fd' }}>
-                Exit Policy Boundaries (V2 Multi-Policy)
-              </span>
-              <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '0.25rem 0 0.75rem' }}>
-                Enable at least one policy boundary. Disabled policies are omitted from onchain
-                mandate enforcement and will not trigger exit.
-              </p>
-
-              {/* 1. Management Fee */}
-              <div
-                className="policy-card"
-                style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  padding: '0.75rem',
-                  borderRadius: '6px',
-                  marginBottom: '0.5rem',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    cursor: isNew ? 'pointer' : 'default',
-                    fontWeight: 600,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={draft.managementFeeEnabled ?? true}
-                    disabled={!isNew}
-                    onChange={(e) =>
-                      setDraft((cur) => ({ ...cur, managementFeeEnabled: e.target.checked }))
-                    }
-                  />
-                  <span>Management Fee Ceiling</span>
-                </label>
-                {(draft.managementFeeEnabled ?? true) && (
-                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
-                    <label>
-                      Max annualized fee (%)
-                      <input
-                        inputMode="decimal"
-                        placeholder="e.g. 1.00"
-                        readOnly={!isNew}
-                        value={
-                          isNew
-                            ? (draft.feePercent ?? '1.00')
-                            : evidence.instruction.feeCeiling.replace('%', '')
-                        }
-                        onChange={(e) => updateDraft('feePercent', e.target.value)}
-                      />
-                      <small style={{ color: '#94a3b8' }}>
-                        Protocol maximum is 5.00% annualized. Triggers exit if curator queues a fee
-                        above this ceiling.
-                      </small>
-                    </label>
+                <div>
+                  <div className="policy-card-title">Performance fee</div>
+                  <div className="policy-card-desc">
+                    Exit if the performance fee goes above your limit.
                   </div>
-                )}
+                </div>
               </div>
+              {draft.performanceFeeEnabled && (
+                <div className="policy-card-input" onClick={(e) => e.stopPropagation()}>
+                  <label
+                    style={{ fontSize: '12px', fontWeight: 600, color: 'var(--aubergine-soft)' }}
+                  >
+                    Maximum performance fee (%)
+                    <input
+                      inputMode="decimal"
+                      value={draft.performanceFeePercent ?? '10'}
+                      onChange={(e) =>
+                        setDraft((cur) => ({ ...cur, performanceFeePercent: e.target.value }))
+                      }
+                      style={{ marginTop: '6px' }}
+                      placeholder="10"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
 
-              {/* 2. Performance Fee */}
-              <div
-                className="policy-card"
-                style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  padding: '0.75rem',
-                  borderRadius: '6px',
-                  marginBottom: '0.5rem',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    cursor: isNew ? 'pointer' : 'default',
-                    fontWeight: 600,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={draft.performanceFeeEnabled ?? false}
-                    disabled={!isNew}
-                    onChange={(e) =>
-                      setDraft((cur) => ({
-                        ...cur,
-                        performanceFeeEnabled: e.target.checked,
-                        performanceFeePercent: e.target.checked
-                          ? cur.performanceFeePercent || '10.0'
-                          : cur.performanceFeePercent,
-                      }))
-                    }
-                  />
-                  <span>Performance Fee Ceiling</span>
-                </label>
-                {draft.performanceFeeEnabled && (
-                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
-                    <label>
-                      Max performance fee (%)
-                      <input
-                        inputMode="decimal"
-                        placeholder="e.g. 10.0"
-                        readOnly={!isNew}
-                        value={draft.performanceFeePercent ?? ''}
-                        onChange={(e) => updateDraft('performanceFeePercent', e.target.value)}
-                      />
-                      <small style={{ color: '#94a3b8' }}>
-                        Capped by Morpho protocol at 50% WAD. Triggers exit if curator queues a
-                        performance fee above this ceiling.
-                      </small>
-                    </label>
+            {/* Management Fee */}
+            <div
+              className={`policy-card-selectable ${draft.managementFeeEnabled ? 'selected' : ''}`}
+              onClick={() =>
+                setDraft((cur) => ({ ...cur, managementFeeEnabled: !cur.managementFeeEnabled }))
+              }
+            >
+              <div className="policy-card-header">
+                <input
+                  type="checkbox"
+                  checked={draft.managementFeeEnabled ?? false}
+                  onChange={(e) =>
+                    setDraft((cur) => ({ ...cur, managementFeeEnabled: e.target.checked }))
+                  }
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div>
+                  <div className="policy-card-title">Management fee</div>
+                  <div className="policy-card-desc">
+                    Exit if the annual management fee goes above your limit.
                   </div>
-                )}
+                </div>
               </div>
-
-              {/* 3. Relative Cap */}
-              <div
-                className="policy-card"
-                style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  padding: '0.75rem',
-                  borderRadius: '6px',
-                  marginBottom: '0.5rem',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    cursor: isNew ? 'pointer' : 'default',
-                    fontWeight: 600,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={draft.relativeCapEnabled ?? false}
-                    disabled={!isNew}
-                    onChange={(e) =>
-                      setDraft((cur) => ({ ...cur, relativeCapEnabled: e.target.checked }))
-                    }
-                  />
-                  <span>Relative Cap Ceilings</span>
-                </label>
-                {draft.relativeCapEnabled && (
-                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
-                    <small style={{ display: 'block', color: '#94a3b8', marginBottom: '0.5rem' }}>
-                      Limits maximum allocation for configured risk IDs. Unconfigured risk IDs do
-                      not trigger an exit.
+              {draft.managementFeeEnabled && (
+                <div className="policy-card-input" onClick={(e) => e.stopPropagation()}>
+                  <label
+                    style={{ fontSize: '12px', fontWeight: 600, color: 'var(--aubergine-soft)' }}
+                  >
+                    Maximum annual fee (%)
+                    <input
+                      inputMode="decimal"
+                      value={draft.feePercent ?? '1.00'}
+                      onChange={(e) => setDraft((cur) => ({ ...cur, feePercent: e.target.value }))}
+                      style={{ marginTop: '6px' }}
+                      placeholder="1.00"
+                    />
+                    <small style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>
+                      Strictly less than 5.00% protocol maximum.
                     </small>
-                    {relativeCapRows.map((row, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          display: 'flex',
-                          gap: '0.5rem',
-                          marginBottom: '0.5rem',
-                          alignItems: 'center',
-                        }}
-                      >
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Advanced Policies Toggle */}
+            <details className="advanced-policies-toggle">
+              <summary>Advanced policies (relative caps, adapters, gates)</summary>
+              <div className="advanced-policies-content">
+                {/* Relative Cap */}
+                <div style={{ marginBottom: '14px' }}>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={draft.relativeCapEnabled ?? false}
+                      onChange={(e) =>
+                        setDraft((cur) => ({ ...cur, relativeCapEnabled: e.target.checked }))
+                      }
+                    />
+                    <span>Relative cap ceiling</span>
+                  </label>
+                  <p style={{ fontSize: '11px', color: 'var(--muted)', margin: '2px 0 8px 24px' }}>
+                    Exit if a configured market allocation exceeds your ceiling.
+                  </p>
+                  {draft.relativeCapEnabled && (
+                    <div style={{ paddingLeft: '24px' }}>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
                         <input
-                          placeholder="Risk ID (0x... 32 bytes)"
-                          value={row.riskId}
-                          readOnly={!isNew}
-                          onChange={(e) => {
-                            const updated = [...relativeCapRows];
-                            updated[idx] = { ...updated[idx], riskId: e.target.value };
-                            setRelativeCapRows(updated);
-                            setDraft((cur) => ({ ...cur, relativeCaps: updated }));
-                          }}
-                          style={{ flex: 2, fontFamily: 'monospace', fontSize: '0.8rem' }}
+                          placeholder="Risk ID (bytes32 hex)"
+                          value={relativeCapRiskId}
+                          onChange={(e) => setRelativeCapRiskId(e.target.value)}
+                          style={{ flex: 2 }}
                         />
                         <input
-                          placeholder="Max % (0-100)"
-                          value={row.maxRelativeCapPercent}
-                          readOnly={!isNew}
-                          onChange={(e) => {
-                            const updated = [...relativeCapRows];
-                            updated[idx] = {
-                              ...updated[idx],
-                              maxRelativeCapPercent: e.target.value,
-                            };
-                            setRelativeCapRows(updated);
-                            setDraft((cur) => ({ ...cur, relativeCaps: updated }));
-                          }}
+                          placeholder="Cap %"
+                          value={relativeCapPercent}
+                          onChange={(e) => setRelativeCapPercent(e.target.value)}
                           style={{ flex: 1 }}
                         />
-                        {isNew && (
-                          <button
-                            type="button"
-                            className="button button-secondary"
-                            style={{ padding: '0.25rem 0.5rem' }}
-                            onClick={() => {
-                              const updated = relativeCapRows.filter((_, i) => i !== idx);
-                              setRelativeCapRows(updated);
-                              setDraft((cur) => ({ ...cur, relativeCaps: updated }));
-                            }}
-                          >
-                            ✕
-                          </button>
-                        )}
+                        <button
+                          className="button button-secondary"
+                          onClick={handleAddRelativeCap}
+                          type="button"
+                        >
+                          Add
+                        </button>
                       </div>
-                    ))}
-                    {isNew && (
-                      <button
-                        type="button"
-                        className="button button-secondary"
-                        style={{ fontSize: '0.8rem' }}
-                        onClick={() => {
-                          const updated = [
-                            ...relativeCapRows,
-                            { riskId: '', maxRelativeCapPercent: '' },
-                          ];
-                          setRelativeCapRows(updated);
-                          setDraft((cur) => ({ ...cur, relativeCaps: updated }));
-                        }}
-                      >
-                        + Add Risk Cap Row
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                      {(draft.relativeCaps ?? []).map((c, i) => (
+                        <div key={i} style={{ fontSize: '11px', color: 'var(--ink)' }}>
+                          {shorten(c.riskId, 8, 6)} ≤ {c.maxRelativeCapPercent}%
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-              {/* 4. Adapter Allowlist */}
-              <div
-                className="policy-card"
-                style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  padding: '0.75rem',
-                  borderRadius: '6px',
-                  marginBottom: '0.5rem',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    cursor: isNew ? 'pointer' : 'default',
-                    fontWeight: 600,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={draft.adapterAllowlistEnabled ?? false}
-                    disabled={!isNew}
-                    onChange={(e) =>
-                      setDraft((cur) => ({ ...cur, adapterAllowlistEnabled: e.target.checked }))
-                    }
-                  />
-                  <span>Adapter Allowlist</span>
-                </label>
-                {draft.adapterAllowlistEnabled && (
-                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
-                    <label>
-                      Approved adapters (comma-separated)
-                      <input
-                        placeholder="e.g. 0x1111..., 0x2222..."
-                        readOnly={!isNew}
-                        value={adapterInput}
-                        onChange={(e) => {
-                          setAdapterInput(e.target.value);
-                          const parsed = e.target.value
-                            .split(',')
-                            .map((s) => s.trim())
-                            .filter(Boolean);
-                          setDraft((cur) => ({ ...cur, approvedAdapters: parsed }));
-                        }}
-                      />
-                      <small style={{ color: '#94a3b8' }}>
-                        Strict allowlist: leaving this empty means NO newly added adapter is
-                        approved (any addition triggers an exit).
-                      </small>
-                    </label>
-                  </div>
-                )}
-              </div>
+                {/* Adapter Allowlist */}
+                <div style={{ marginBottom: '14px' }}>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={draft.adapterAllowlistEnabled ?? false}
+                      onChange={(e) =>
+                        setDraft((cur) => ({ ...cur, adapterAllowlistEnabled: e.target.checked }))
+                      }
+                    />
+                    <span>Adapter allowlist</span>
+                  </label>
+                  <p style={{ fontSize: '11px', color: 'var(--muted)', margin: '2px 0 8px 24px' }}>
+                    Exit if an unapproved adapter contract is queued.
+                  </p>
+                  {draft.adapterAllowlistEnabled && (
+                    <div style={{ paddingLeft: '24px' }}>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                        <input
+                          placeholder="0x... adapter address"
+                          value={adapterInput}
+                          onChange={(e) => setAdapterInput(e.target.value)}
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          className="button button-secondary"
+                          onClick={handleAddAdapter}
+                          type="button"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      {(draft.approvedAdapters ?? []).map((a, i) => (
+                        <div key={i} style={{ fontSize: '11px', color: 'var(--ink)' }}>
+                          {shorten(a, 8, 6)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-              {/* 5. Redemption Gate Allowlist */}
-              <div
-                className="policy-card"
-                style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  padding: '0.75rem',
-                  borderRadius: '6px',
-                  marginBottom: '0.5rem',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    cursor: isNew ? 'pointer' : 'default',
-                    fontWeight: 600,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={draft.redemptionGateAllowlistEnabled ?? false}
-                    disabled={!isNew}
-                    onChange={(e) =>
-                      setDraft((cur) => ({
-                        ...cur,
-                        redemptionGateAllowlistEnabled: e.target.checked,
-                      }))
-                    }
-                  />
-                  <span>Redemption Gate Allowlist</span>
-                </label>
-                {draft.redemptionGateAllowlistEnabled && (
-                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
-                    <small style={{ display: 'block', color: '#94a3b8', marginBottom: '0.5rem' }}>
-                      Strict allowlist: empty allowlists mean NO non-zero gate is approved (only
-                      address(0) / un-gated is permitted).
-                    </small>
-                    <label>
-                      Approved send-shares gates
-                      <input
-                        placeholder="e.g. 0x3333..."
-                        readOnly={!isNew}
-                        value={sendGateInput}
-                        onChange={(e) => {
-                          setSendGateInput(e.target.value);
-                          const parsed = e.target.value
-                            .split(',')
-                            .map((s) => s.trim())
-                            .filter(Boolean);
-                          setDraft((cur) => ({ ...cur, approvedSendSharesGates: parsed }));
-                        }}
-                      />
-                    </label>
-                    <label style={{ marginTop: '0.5rem' }}>
-                      Approved receive-assets gates
-                      <input
-                        placeholder="e.g. 0x4444..."
-                        readOnly={!isNew}
-                        value={receiveGateInput}
-                        onChange={(e) => {
-                          setReceiveGateInput(e.target.value);
-                          const parsed = e.target.value
-                            .split(',')
-                            .map((s) => s.trim())
-                            .filter(Boolean);
-                          setDraft((cur) => ({ ...cur, approvedReceiveAssetsGates: parsed }));
-                        }}
-                      />
-                    </label>
-                  </div>
-                )}
+                {/* Gates */}
+                <div>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={draft.redemptionGateAllowlistEnabled ?? false}
+                      onChange={(e) =>
+                        setDraft((cur) => ({
+                          ...cur,
+                          redemptionGateAllowlistEnabled: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span>Redemption gates</span>
+                  </label>
+                  <p style={{ fontSize: '11px', color: 'var(--muted)', margin: '2px 0 8px 24px' }}>
+                    Exit if an unapproved redemption gate is proposed.
+                  </p>
+                  {draft.redemptionGateAllowlistEnabled && (
+                    <div style={{ paddingLeft: '24px' }}>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                        <input
+                          placeholder="0x... gate address"
+                          value={sendGateInput}
+                          onChange={(e) => setSendGateInput(e.target.value)}
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          className="button button-secondary"
+                          onClick={handleAddSendGate}
+                          type="button"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="form-grid">
-              <label>
-                Management fee ceiling (%)
-                <input
-                  onChange={(event) => updateDraft('feePercent', event.target.value)}
-                  inputMode="decimal"
-                  readOnly={!isNew}
-                  value={
-                    isNew ? draft.feePercent : evidence.instruction.feeCeiling.replace('%', '')
-                  }
-                />
-                <small style={{ color: '#94a3b8' }}>
-                  V1 legacy guard: management fee ceiling only.
-                </small>
-              </label>
-            </div>
-          )}
+            </details>
 
-          <label>
-            Receiver
-            <input value={wallet.address ?? evidence.position.owner} readOnly />
-            <small>Always fixed to the mandate owner.</small>
-          </label>
-          <div className="approval-line">
-            <Icon name="wallet" />
-            <div>
-              <strong>Two owner signatures</strong>
-              <span>Exact share approval, then arm the guard.</span>
-            </div>
-          </div>
-          <div className="liquidity-warning">
-            <strong>Liquidity boundary</strong>
-            <span>
-              This rule authorizes an exact redemption; it cannot guarantee executable vault
-              liquidity and will not automatically submit a partial exit.
-            </span>
-          </div>
-          {isNew && wallet.action.stage !== 'idle' ? (
-            <div className={`action-message action-${wallet.action.stage}`} aria-live="polite">
-              {wallet.action.message}
-              {'transactionHash' in wallet.action && wallet.action.transactionHash ? (
-                <ExternalLink href={explorerTransaction(wallet.action.transactionHash)}>
-                  View transaction
-                </ExternalLink>
-              ) : null}
-            </div>
-          ) : null}
-          {isNew ? (
-            wallet.address ? (
+            <div className="drawer-actions-row">
               <button
-                className="button button-primary button-block"
-                disabled={
-                  working ||
-                  !wallet.runtime?.monitoringReady ||
-                  Number(wallet.position?.position.shares ?? '0') <= 0 ||
-                  (wallet.runtime?.guardVersion === 'v2' &&
-                    !(
-                      draft.managementFeeEnabled ||
-                      draft.performanceFeeEnabled ||
-                      draft.relativeCapEnabled ||
-                      draft.adapterAllowlistEnabled ||
-                      draft.redemptionGateAllowlistEnabled
-                    ))
-                }
-                onClick={() => void wallet.approveAndArm(draft)}
+                className="button button-primary"
+                disabled={!hasAnyPolicyEnabled}
+                onClick={() => setStep(2)}
+                style={{ width: '100%' }}
                 type="button"
               >
-                {working
-                  ? 'Waiting for owner confirmation…'
-                  : wallet.runtime?.guardVersion === 'v2' &&
-                      !(
-                        draft.managementFeeEnabled ||
-                        draft.performanceFeeEnabled ||
-                        draft.relativeCapEnabled ||
-                        draft.adapterAllowlistEnabled ||
-                        draft.redemptionGateAllowlistEnabled
-                      )
-                    ? 'Enable at least one policy boundary'
-                    : wallet.runtime?.guardVersion === 'v2'
-                      ? 'Approve shares and arm V2 rule'
-                      : 'Approve shares and arm V1 rule'}
+                Next: Exit details →
               </button>
-            ) : (
-              <button
-                className="button button-primary button-block"
-                onClick={wallet.connect}
-                type="button"
-              >
-                Connect owner wallet to continue
-              </button>
-            )
-          ) : (
-            <ExternalLink
-              href={explorerTransaction(
-                armTransaction?.transactionHash ?? evidence.result.transactionHash,
-              )}
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: Exit details */}
+        {step === 2 && (
+          <div className="step-container">
+            <h3
+              style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px', color: 'var(--ink)' }}
             >
-              View arming transaction
-            </ExternalLink>
-          )}
-        </form>
+              How much should VETO protect?
+            </h3>
+
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <label style={{ display: 'grid', gap: '6px', fontSize: '12px', fontWeight: 600 }}>
+                Shares to protect ({shareSymbol})
+                <input
+                  inputMode="decimal"
+                  value={draft.shares}
+                  onChange={(e) => setDraft((cur) => ({ ...cur, shares: e.target.value }))}
+                />
+              </label>
+
+              <label style={{ display: 'grid', gap: '6px', fontSize: '12px', fontWeight: 600 }}>
+                Minimum return ({assetSymbol})
+                <input
+                  inputMode="decimal"
+                  value={draft.minimumReturn}
+                  onChange={(e) => setDraft((cur) => ({ ...cur, minimumReturn: e.target.value }))}
+                />
+              </label>
+
+              <div className="form-grid">
+                <label style={{ display: 'grid', gap: '6px', fontSize: '12px', fontWeight: 600 }}>
+                  Rule expires (hours)
+                  <input
+                    inputMode="numeric"
+                    value={draft.expiresHours}
+                    onChange={(e) => setDraft((cur) => ({ ...cur, expiresHours: e.target.value }))}
+                  />
+                  <small style={{ color: 'var(--muted)' }}>168 hrs = 7 days</small>
+                </label>
+
+                <label style={{ display: 'grid', gap: '6px', fontSize: '12px', fontWeight: 600 }}>
+                  Safety buffer (minutes)
+                  <input
+                    inputMode="numeric"
+                    value={draft.safetyMinutes}
+                    onChange={(e) => setDraft((cur) => ({ ...cur, safetyMinutes: e.target.value }))}
+                  />
+                  <small style={{ color: 'var(--muted)' }}>Lead time before timelock</small>
+                </label>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: '20px',
+                padding: '14px',
+                background: 'var(--lavender)',
+                borderRadius: '10px',
+                fontSize: '12px',
+                lineHeight: 1.5,
+                color: 'var(--aubergine-soft)',
+              }}
+            >
+              Assets are redeemed directly to your wallet. VETO and KeeperHub never receive the
+              funds.
+            </div>
+
+            <div className="drawer-actions-row">
+              <button className="button button-secondary" onClick={() => setStep(1)} type="button">
+                ← Back
+              </button>
+              <button
+                className="button button-primary"
+                onClick={() => setStep(3)}
+                style={{ flex: 1 }}
+                type="button"
+              >
+                Next: Review rule →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: Review & Progress */}
+        {step === 3 && (
+          <div className="step-container">
+            <h3
+              style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px', color: 'var(--ink)' }}
+            >
+              Review your rule
+            </h3>
+
+            <div className="rule-summary-card">
+              {draft.performanceFeeEnabled && (
+                <div className="summary-row">
+                  <span>Performance fee</span>
+                  <strong>Exit above {draft.performanceFeePercent}%</strong>
+                </div>
+              )}
+              {draft.managementFeeEnabled && (
+                <div className="summary-row">
+                  <span>Management fee</span>
+                  <strong>Exit above {draft.feePercent}%</strong>
+                </div>
+              )}
+              {draft.relativeCapEnabled && (
+                <div className="summary-row">
+                  <span>Relative caps</span>
+                  <strong>{draft.relativeCaps?.length ?? 0} market caps configured</strong>
+                </div>
+              )}
+              {draft.adapterAllowlistEnabled && (
+                <div className="summary-row">
+                  <span>Adapter allowlist</span>
+                  <strong>{draft.approvedAdapters?.length ?? 0} approved</strong>
+                </div>
+              )}
+              {draft.redemptionGateAllowlistEnabled && (
+                <div className="summary-row">
+                  <span>Redemption gates</span>
+                  <strong>Strict gate allowlist</strong>
+                </div>
+              )}
+              <div className="summary-row">
+                <span>Shares protected</span>
+                <strong>
+                  {draft.shares} {shareSymbol}
+                </strong>
+              </div>
+              <div className="summary-row">
+                <span>Minimum return</span>
+                <strong>
+                  {draft.minimumReturn} {assetSymbol}
+                </strong>
+              </div>
+              <div className="summary-row">
+                <span>Receiver</span>
+                <strong>
+                  {shorten(wallet.address ?? '0x0000000000000000000000000000000000000000')}
+                </strong>
+              </div>
+              <div className="summary-row">
+                <span>Rule duration</span>
+                <strong>{draft.expiresHours} hours (7 days)</strong>
+              </div>
+            </div>
+
+            {/* Progress indicators when working or complete */}
+            {working || complete || error ? (
+              <div style={{ margin: '18px 0' }}>
+                <ul className="progress-list">
+                  <li
+                    className={`progress-item ${wallet.action.stage === 'approving' ? 'active' : ['arming', 'registering', 'complete'].includes(wallet.action.stage) ? 'done' : ''}`}
+                  >
+                    <span>1</span>
+                    <span>Approve shares</span>
+                    <span style={{ marginLeft: 'auto' }}>
+                      {['arming', 'registering', 'complete'].includes(wallet.action.stage)
+                        ? '✓'
+                        : wallet.action.stage === 'approving'
+                          ? 'Waiting for wallet…'
+                          : ''}
+                    </span>
+                  </li>
+                  <li
+                    className={`progress-item ${wallet.action.stage === 'arming' || wallet.action.stage === 'registering' ? 'active' : wallet.action.stage === 'complete' ? 'done' : ''}`}
+                  >
+                    <span>2</span>
+                    <span>Arm exit rule</span>
+                    <span style={{ marginLeft: 'auto' }}>
+                      {wallet.action.stage === 'complete'
+                        ? '✓'
+                        : wallet.action.stage === 'arming' || wallet.action.stage === 'registering'
+                          ? 'Waiting for wallet…'
+                          : ''}
+                    </span>
+                  </li>
+                  <li
+                    className={`progress-item ${wallet.action.stage === 'complete' ? 'done' : ''}`}
+                  >
+                    <span>3</span>
+                    <span>Protection active</span>
+                    <span style={{ marginLeft: 'auto' }}>
+                      {wallet.action.stage === 'complete' ? '✓' : ''}
+                    </span>
+                  </li>
+                </ul>
+
+                {complete && (
+                  <div
+                    style={{
+                      padding: '16px',
+                      background: 'var(--verified-soft)',
+                      borderRadius: '12px',
+                      marginBottom: '16px',
+                    }}
+                  >
+                    <strong
+                      style={{ color: 'var(--verified)', display: 'block', fontSize: '15px' }}
+                    >
+                      Protection active
+                    </strong>
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        color: 'var(--ink)',
+                        display: 'block',
+                        marginTop: '4px',
+                      }}
+                    >
+                      {draft.performanceFeeEnabled
+                        ? `Performance fee ≤ ${draft.performanceFeePercent}%`
+                        : 'Exit mandate confirmed onchain.'}
+                    </span>
+                    <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '8px 0 0' }}>
+                      VETO is watching this vault for a queued change that crosses your rule.
+                    </p>
+                  </div>
+                )}
+
+                {error && wallet.action.stage === 'error' && (
+                  <div
+                    style={{
+                      padding: '14px',
+                      background: '#fef2f2',
+                      borderRadius: '10px',
+                      color: '#b91c1c',
+                      fontSize: '13px',
+                      marginBottom: '16px',
+                    }}
+                  >
+                    {wallet.action.message}
+                  </div>
+                )}
+
+                <div className="drawer-actions-row">
+                  {complete ? (
+                    <button
+                      className="button button-primary"
+                      onClick={close}
+                      style={{ width: '100%' }}
+                      type="button"
+                    >
+                      Done
+                    </button>
+                  ) : error ? (
+                    <button
+                      className="button button-secondary"
+                      onClick={() => wallet.resetAction()}
+                      style={{ width: '100%' }}
+                      type="button"
+                    >
+                      Try again
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--muted)',
+                    margin: '0 0 20px',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  This requires two wallet confirmations:
+                  <br />
+                  1. Approve the selected vault shares
+                  <br />
+                  2. Arm your VETO rule
+                </p>
+
+                <div className="drawer-actions-row">
+                  <button
+                    className="button button-secondary"
+                    onClick={() => setStep(2)}
+                    type="button"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    className="button button-primary"
+                    onClick={() => void wallet.approveAndArm(draft)}
+                    style={{ flex: 1 }}
+                    type="button"
+                  >
+                    Approve & arm
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );
@@ -1541,7 +1293,7 @@ function RuleDrawer({
 
 export function OperatorConsole({ evidence }: { evidence: Evidence }) {
   const [view, setView] = useState<View>('overview');
-  const [drawer, setDrawer] = useState<'review' | 'new'>();
+  const [drawer, setDrawer] = useState<'review' | 'new' | undefined>();
   const wallet = useVetoWallet();
 
   useEffect(() => {
@@ -1570,26 +1322,20 @@ export function OperatorConsole({ evidence }: { evidence: Evidence }) {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <span className="network-orb" />
-          <div>
-            <strong>Base Sepolia</strong>
-            <span>Controlled environment</span>
-          </div>
+          <span>Base Sepolia</span>
         </div>
       </aside>
 
       <section className="app-main">
         <header className="topbar">
           <Brand compact />
-          <div className="run-context">
-            <span className="live-orb" /> Live control plane{' '}
-            <strong>{wallet.runtime?.monitoringReady ? 'READY' : 'CHECKING'}</strong>
-          </div>
+          <div className="network-pill">Base Sepolia</div>
           <button className="wallet-button" onClick={wallet.connect} type="button">
             <Icon name="wallet" />
             <span aria-live="polite">{wallet.message}</span>
           </button>
         </header>
+
         <div className="content-frame">
           {view === 'overview' ? (
             <Overview
@@ -1598,24 +1344,23 @@ export function OperatorConsole({ evidence }: { evidence: Evidence }) {
                 wallet.resetAction();
                 setDrawer('new');
               }}
-              openRule={() => setDrawer('review')}
+              setView={setView}
               wallet={wallet}
             />
           ) : null}
           {view === 'rules' ? (
             <Rules
-              evidence={evidence}
               openNewRule={() => {
                 wallet.resetAction();
                 setDrawer('new');
               }}
-              openRule={() => setDrawer('review')}
               wallet={wallet}
             />
           ) : null}
-          {view === 'activity' ? <Activity evidence={evidence} /> : null}
+          {view === 'activity' ? <Activity setView={setView} wallet={wallet} /> : null}
           {view === 'evidence' ? <EvidenceView evidence={evidence} /> : null}
         </div>
+
         <nav aria-label="Mobile navigation" className="mobile-nav">
           {navigation.map((item) => (
             <button
@@ -1631,10 +1376,10 @@ export function OperatorConsole({ evidence }: { evidence: Evidence }) {
           ))}
         </nav>
       </section>
+
       {drawer ? (
         <RuleDrawer
           close={() => setDrawer(undefined)}
-          evidence={evidence}
           key={`${drawer}-${wallet.address ?? 'disconnected'}`}
           mode={drawer}
           wallet={wallet}

@@ -220,13 +220,17 @@ export function useVetoWallet() {
   }
 
   async function walletClient() {
-    if (!window.ethereum || !address) throw new Error('CONNECT_WALLET_FIRST');
+    if (!window.ethereum || !address) throw new Error('Connect your wallet first.');
     const client = createWalletClient({
       account: address,
       chain: baseSepolia,
       transport: custom(window.ethereum),
     });
-    await client.switchChain({ id: baseSepolia.id });
+    try {
+      await client.switchChain({ id: baseSepolia.id });
+    } catch {
+      throw new Error('Switch to Base Sepolia to continue.');
+    }
     return client;
   }
 
@@ -391,9 +395,25 @@ export function useVetoWallet() {
         });
       }
     } catch (error) {
+      const rawMsg = error instanceof Error ? error.message : 'Rule activation failed.';
+      let friendly = rawMsg;
+      if (
+        rawMsg.includes('User rejected') ||
+        rawMsg.includes('user rejected') ||
+        rawMsg.includes('rejected the request') ||
+        rawMsg.includes('ACTION_REJECTED')
+      ) {
+        friendly = 'Transaction cancelled.';
+      } else if (rawMsg.includes('insufficient funds')) {
+        friendly = 'Insufficient funds for gas.';
+      } else if (rawMsg.includes('reverted') || rawMsg.includes('revert')) {
+        friendly = "Couldn't arm the rule. Your shares were not moved.";
+      } else if (rawMsg.includes('Switch to Base Sepolia')) {
+        friendly = 'Switch to Base Sepolia to continue.';
+      }
       setAction({
         stage: 'error',
-        message: error instanceof Error ? error.message : 'Rule activation failed.',
+        message: friendly,
       });
     }
   }
@@ -422,9 +442,19 @@ export function useVetoWallet() {
       await refreshOwner(address);
       setAction({ stage: 'complete', message: 'Exit rule cancelled', transactionHash });
     } catch (error) {
+      const rawMsg = error instanceof Error ? error.message : 'Cancellation failed.';
+      let friendly = rawMsg;
+      if (
+        rawMsg.includes('User rejected') ||
+        rawMsg.includes('user rejected') ||
+        rawMsg.includes('rejected the request') ||
+        rawMsg.includes('ACTION_REJECTED')
+      ) {
+        friendly = 'Transaction cancelled.';
+      }
       setAction({
         stage: 'error',
-        message: error instanceof Error ? error.message : 'Cancellation failed.',
+        message: friendly,
       });
     }
   }
