@@ -39,6 +39,10 @@ export function compileGuard() {
   return compileContracts()['VetoExitGuard.sol'].VetoExitGuard;
 }
 
+export function compileGuardV2() {
+  return compileContracts()['VetoExitGuardV2.sol'].VetoExitGuardV2;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const contracts = compileContracts();
   if (!process.argv.includes('--check')) {

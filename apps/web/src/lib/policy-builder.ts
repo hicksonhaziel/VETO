@@ -1,4 +1,4 @@
-import { getAddress, isAddress, parseUnits, type Address, type Hex } from 'viem';
+import { formatUnits, getAddress, isAddress, parseUnits, type Address, type Hex } from 'viem';
 
 export const POLICY_MANAGEMENT_FEE = 1n << 0n; // 1
 export const POLICY_PERFORMANCE_FEE = 1n << 1n; // 2
@@ -7,9 +7,11 @@ export const POLICY_ADAPTER_ALLOWLIST = 1n << 3n; // 8
 export const POLICY_REDEMPTION_GATE_ALLOWLIST = 1n << 4n; // 16
 
 export const WAD = 10n ** 18n;
-export const SECONDS_PER_YEAR = 31_536_000n;
-export const MAX_MANAGEMENT_FEE = (20n * 10n ** 16n) / SECONDS_PER_YEAR; // ~6341958396n
+export const SECONDS_PER_YEAR = 31_536_000n; // 365 days
+export const MAX_MANAGEMENT_FEE_WAD_PROTOCOL = 5n * 10n ** 16n; // 0.05e18 = 5.00% annualized
+export const MAX_MANAGEMENT_FEE = MAX_MANAGEMENT_FEE_WAD_PROTOCOL / SECONDS_PER_YEAR; // 1_585_489_599n
 export const MAX_PERFORMANCE_FEE = 50n * 10n ** 16n; // 50% WAD = 0.50e18
+export const MAX_RELATIVE_CAP_WAD_PROTOCOL = WAD; // 1.0e18 = 100%
 
 export type RelativeCapDraftRow = {
   riskId: string;
@@ -79,6 +81,52 @@ export function assertV1DraftCompatible(draft: RuleDraftV2): void {
   }
 }
 
+export function parseDraftSharesAndAssets(params: {
+  draftShares: string;
+  draftMinimumReturn: string;
+  shareDecimals: number;
+  assetDecimals: number;
+}): {
+  shares: bigint;
+  minAssets: bigint;
+} {
+  const shares = parseUnits(params.draftShares.trim(), params.shareDecimals);
+  const minAssets = parseUnits(params.draftMinimumReturn.trim(), params.assetDecimals);
+  return { shares, minAssets };
+}
+
+export function formatSharesAndAssets(params: {
+  shares: bigint;
+  assets: bigint;
+  shareDecimals: number;
+  assetDecimals: number;
+}): {
+  sharesFormatted: string;
+  assetsFormatted: string;
+} {
+  return {
+    sharesFormatted: formatUnits(params.shares, params.shareDecimals),
+    assetsFormatted: formatUnits(params.assets, params.assetDecimals),
+  };
+}
+
+export function formatAnnualizedFee(ratePerSecond: bigint): string {
+  if (ratePerSecond === 0n) return '0.00%';
+  const annualizedWad = ratePerSecond * SECONDS_PER_YEAR;
+  const bps = (annualizedWad * 10000n + WAD / 2n) / WAD;
+  const whole = bps / 100n;
+  const frac = (bps % 100n).toString().padStart(2, '0');
+  return `${whole}.${frac}%`;
+}
+
+export function formatWadPercent(wad: bigint): string {
+  if (wad === 0n) return '0.00%';
+  const bps = (wad * 10000n) / WAD;
+  const whole = bps / 100n;
+  const frac = (bps % 100n).toString().padStart(2, '0');
+  return `${whole}.${frac}%`;
+}
+
 export function buildV2PolicyConfig(draft: RuleDraftV2): PolicyConfig {
   let policyFlags = 0n;
   let maxManagementFee = 0n;
@@ -88,14 +136,8 @@ export function buildV2PolicyConfig(draft: RuleDraftV2): PolicyConfig {
   const approvedSendSharesGates: Address[] = [];
   const approvedReceiveAssetsGates: Address[] = [];
 
-  // 1. Management Fee Policy
-  const mgmtEnabled =
-    draft.managementFeeEnabled === true ||
-    (draft.managementFeeEnabled === undefined &&
-      draft.feePercent !== undefined &&
-      draft.feePercent.trim() !== '');
-
-  if (mgmtEnabled) {
+  // 1. Management Fee Policy (Explicit toggle required)
+  if (draft.managementFeeEnabled === true) {
     if (!draft.feePercent || draft.feePercent.trim() === '') {
       throw new Error('Management fee percent is required when management fee policy is enabled.');
     }
@@ -104,26 +146,25 @@ export function buildV2PolicyConfig(draft: RuleDraftV2): PolicyConfig {
       throw new Error('Management fee percent must be a positive number.');
     }
     const feeWad = parseUnits(draft.feePercent.trim(), 18) / 100n;
+    if (feeWad >= MAX_MANAGEMENT_FEE_WAD_PROTOCOL) {
+      throw new Error(
+        'Management fee ceiling must be less than the protocol maximum (5.00% annualized).',
+      );
+    }
     maxManagementFee = feeWad / SECONDS_PER_YEAR;
     if (maxManagementFee <= 0n) {
       throw new Error('Management fee rate per second must be greater than zero.');
     }
     if (maxManagementFee >= MAX_MANAGEMENT_FEE) {
       throw new Error(
-        'Management fee ceiling must be less than the protocol maximum (20% annualized).',
+        'Management fee ceiling must be less than the protocol maximum (5.00% annualized).',
       );
     }
     policyFlags |= POLICY_MANAGEMENT_FEE;
   }
 
-  // 2. Performance Fee Policy
-  const perfEnabled =
-    draft.performanceFeeEnabled === true ||
-    (draft.performanceFeeEnabled === undefined &&
-      draft.performanceFeePercent !== undefined &&
-      draft.performanceFeePercent.trim() !== '');
-
-  if (perfEnabled) {
+  // 2. Performance Fee Policy (Explicit toggle required)
+  if (draft.performanceFeeEnabled === true) {
     if (!draft.performanceFeePercent || draft.performanceFeePercent.trim() === '') {
       throw new Error(
         'Performance fee percent is required when performance fee policy is enabled.',
@@ -142,14 +183,8 @@ export function buildV2PolicyConfig(draft: RuleDraftV2): PolicyConfig {
     policyFlags |= POLICY_PERFORMANCE_FEE;
   }
 
-  // 3. Relative Cap Policy
-  const capEnabled =
-    draft.relativeCapEnabled === true ||
-    (draft.relativeCapEnabled === undefined &&
-      draft.relativeCaps !== undefined &&
-      draft.relativeCaps.length > 0);
-
-  if (capEnabled) {
+  // 3. Relative Cap Policy (Explicit toggle required)
+  if (draft.relativeCapEnabled === true) {
     if (!draft.relativeCaps || draft.relativeCaps.length === 0) {
       throw new Error(
         'At least one risk ID and relative cap row must be configured when relative cap policy is enabled.',
@@ -185,12 +220,8 @@ export function buildV2PolicyConfig(draft: RuleDraftV2): PolicyConfig {
     policyFlags |= POLICY_RELATIVE_CAP;
   }
 
-  // 4. Adapter Allowlist Policy
-  const adapterEnabled =
-    draft.adapterAllowlistEnabled === true ||
-    (draft.adapterAllowlistEnabled === undefined && draft.approvedAdapters !== undefined);
-
-  if (adapterEnabled) {
+  // 4. Adapter Allowlist Policy (Explicit toggle required)
+  if (draft.adapterAllowlistEnabled === true) {
     const rawAdapters = draft.approvedAdapters ?? [];
     const seenAdapters = new Set<string>();
     for (let i = 0; i < rawAdapters.length; i++) {
@@ -209,17 +240,12 @@ export function buildV2PolicyConfig(draft: RuleDraftV2): PolicyConfig {
       seenAdapters.add(checksummed.toLowerCase());
       approvedAdapters.push(checksummed);
     }
+    // Strict empty allowlist supported: approvedAdapters can be [] meaning NO newly added adapter is approved
     policyFlags |= POLICY_ADAPTER_ALLOWLIST;
   }
 
-  // 5. Redemption Gate Allowlist Policy
-  const gateEnabled =
-    draft.redemptionGateAllowlistEnabled === true ||
-    (draft.redemptionGateAllowlistEnabled === undefined &&
-      (draft.approvedSendSharesGates !== undefined ||
-        draft.approvedReceiveAssetsGates !== undefined));
-
-  if (gateEnabled) {
+  // 5. Redemption Gate Allowlist Policy (Explicit toggle required)
+  if (draft.redemptionGateAllowlistEnabled === true) {
     const rawSendGates = draft.approvedSendSharesGates ?? [];
     const seenSendGates = new Set<string>();
     for (let i = 0; i < rawSendGates.length; i++) {
@@ -242,7 +268,7 @@ export function buildV2PolicyConfig(draft: RuleDraftV2): PolicyConfig {
     }
 
     const rawReceiveGates = draft.approvedReceiveAssetsGates ?? [];
-    const seenReceiveGates = new Set<string>();
+    const seenReceiveGates = new practicalSet();
     for (let i = 0; i < rawReceiveGates.length; i++) {
       const item = rawReceiveGates[i].trim();
       if (!item) continue;
@@ -261,6 +287,7 @@ export function buildV2PolicyConfig(draft: RuleDraftV2): PolicyConfig {
       seenReceiveGates.add(checksummed.toLowerCase());
       approvedReceiveAssetsGates.push(checksummed);
     }
+    // Strict empty allowlist supported: gates can be [] meaning NO non-zero gate is approved
     policyFlags |= POLICY_REDEMPTION_GATE_ALLOWLIST;
   }
 
@@ -282,3 +309,5 @@ export function buildV2PolicyConfig(draft: RuleDraftV2): PolicyConfig {
     approvedReceiveAssetsGates,
   };
 }
+
+class practicalSet extends Set<string> {}

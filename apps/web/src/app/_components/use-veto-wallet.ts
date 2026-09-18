@@ -78,14 +78,25 @@ export type LivePosition = {
     owner: Address;
     vault: Address;
     asset: Address;
-    symbol: string;
-    decimals: number;
     supported: boolean;
-    shares: string;
+
+    sharesRaw: string;
     sharesFormatted: string;
-    assets: string;
+    shareDecimals: number;
+    shareSymbol: string;
+
+    assetsRaw: string;
     assetsFormatted: string;
+    assetDecimals: number;
+    assetSymbol: string;
+
+    symbol?: string;
+    decimals?: number;
+    shares?: string;
+    assets?: string;
     allowance: string;
+    allowanceFormatted?: string;
+    needsAllowance?: boolean;
   };
   mandate: null | MandateDetails;
   contracts: {
@@ -229,15 +240,24 @@ export function useVetoWallet() {
       return;
     }
     try {
-      const shares = parseUnits(draft.shares, position.position.decimals);
-      const minimumReturn = parseUnits(draft.minimumReturn, position.position.decimals);
+      const shareDecimals = position.position.shareDecimals ?? position.position.decimals ?? 18;
+      const assetDecimals = position.position.assetDecimals ?? position.position.decimals ?? 18;
+      const shares = parseUnits(draft.shares, shareDecimals);
+      const minimumReturn = parseUnits(draft.minimumReturn, assetDecimals);
       const safetySeconds = BigInt(Math.round(Number(draft.safetyMinutes) * 60));
       const expiresAt = BigInt(Math.floor(Date.now() / 1000 + Number(draft.expiresHours) * 3600));
 
-      if (shares <= 0n || shares > BigInt(position.position.shares)) {
+      const rawPositionShares = BigInt(
+        position.position.sharesRaw ?? position.position.shares ?? '0',
+      );
+      const rawPositionAssets = BigInt(
+        position.position.assetsRaw ?? position.position.assets ?? '0',
+      );
+
+      if (shares <= 0n || shares > rawPositionShares) {
         throw new Error('Share amount exceeds the connected position.');
       }
-      if (minimumReturn <= 0n || minimumReturn > BigInt(position.position.assets)) {
+      if (minimumReturn <= 0n || minimumReturn > rawPositionAssets) {
         throw new Error('Minimum return must fit the current preview.');
       }
       if (safetySeconds <= 0n) throw new Error('Safety window must be greater than zero.');

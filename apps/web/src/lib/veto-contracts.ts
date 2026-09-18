@@ -14,6 +14,9 @@ export const vaultAbi = parseAbi([
   'function approve(address spender, uint256 value) returns (bool)',
   'function asset() view returns (address)',
   'function previewRedeem(uint256 shares) view returns (uint256 assets)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)',
+  'function name() view returns (string)',
 ]);
 
 export const factoryAbi = parseAbi(['function isVaultV2(address account) view returns (bool)']);

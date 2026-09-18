@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
 import { useVetoWallet, type RuleDraft, type VetoWallet } from './use-veto-wallet';
+import { formatAnnualizedFee, formatWadPercent } from '@/lib/policy-builder';
 import type { dayThreeEvidence } from '@/data/day-three';
 
 type Evidence = typeof dayThreeEvidence;
@@ -363,6 +364,180 @@ function Overview({
   );
 }
 
+function PolicySummaryView({ config }: { config: Record<string, any> }) {
+  const flags = BigInt(String(config.policyFlags ?? '0'));
+  const hasMgmt = (flags & 1n) !== 0n;
+  const hasPerf = (flags & 2n) !== 0n;
+  const hasCap = (flags & 4n) !== 0n;
+  const hasAdapter = (flags & 8n) !== 0n;
+  const hasGate = (flags & 16n) !== 0n;
+
+  return (
+    <div
+      className="policy-summary-details"
+      style={{
+        marginTop: '0.75rem',
+        fontSize: '0.85rem',
+        lineHeight: '1.5',
+        background: 'rgba(15, 23, 42, 0.6)',
+        padding: '0.75rem',
+        borderRadius: '6px',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+      }}
+    >
+      <div
+        style={{
+          fontWeight: 600,
+          color: '#93c5fd',
+          marginBottom: '0.5rem',
+          fontSize: '0.8rem',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+        }}
+      >
+        Verified Active Boundaries
+      </div>
+      {hasMgmt && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
+          <span style={{ color: '#94a3b8' }}>Management fee</span>
+          <strong style={{ color: '#f8fafc' }}>
+            ≤ {formatAnnualizedFee(BigInt(String(config.maxManagementFee ?? '0')))}
+          </strong>
+        </div>
+      )}
+      {hasPerf && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
+          <span style={{ color: '#94a3b8' }}>Performance fee</span>
+          <strong style={{ color: '#f8fafc' }}>
+            ≤ {formatWadPercent(BigInt(String(config.maxPerformanceFee ?? '0')))}
+          </strong>
+        </div>
+      )}
+      {hasCap && (
+        <div
+          style={{
+            marginTop: '0.4rem',
+            borderTop: '1px dashed rgba(255,255,255,0.06)',
+            paddingTop: '0.4rem',
+          }}
+        >
+          <span style={{ color: '#94a3b8' }}>Relative cap ceilings:</span>
+          {Array.isArray(config.relativeCaps) && config.relativeCaps.length > 0 ? (
+            config.relativeCaps.map((c: any, i: number) => (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  paddingLeft: '0.5rem',
+                  fontFamily: 'monospace',
+                  fontSize: '0.8rem',
+                  paddingTop: '2px',
+                }}
+              >
+                <span style={{ color: '#cbd5e1' }}>{shorten(String(c.riskId), 10, 6)}</span>
+                <strong style={{ color: '#f8fafc' }}>
+                  ≤ {formatWadPercent(BigInt(String(c.maxRelativeCap ?? '0')))}
+                </strong>
+              </div>
+            ))
+          ) : (
+            <div style={{ paddingLeft: '0.5rem', color: '#f87171' }}>None configured</div>
+          )}
+        </div>
+      )}
+      {hasAdapter && (
+        <div
+          style={{
+            marginTop: '0.4rem',
+            borderTop: '1px dashed rgba(255,255,255,0.06)',
+            paddingTop: '0.4rem',
+          }}
+        >
+          <span style={{ color: '#94a3b8' }}>Approved adapters:</span>
+          {Array.isArray(config.approvedAdapters) && config.approvedAdapters.length > 0 ? (
+            config.approvedAdapters.map((a: string, i: number) => (
+              <div
+                key={i}
+                style={{
+                  paddingLeft: '0.5rem',
+                  fontFamily: 'monospace',
+                  fontSize: '0.8rem',
+                  color: '#cbd5e1',
+                  paddingTop: '2px',
+                }}
+              >
+                {shorten(a, 10, 6)}
+              </div>
+            ))
+          ) : (
+            <div style={{ paddingLeft: '0.5rem', color: '#f59e0b', fontSize: '0.8rem' }}>
+              None (Strict: no new adapter approved)
+            </div>
+          )}
+        </div>
+      )}
+      {hasGate && (
+        <div
+          style={{
+            marginTop: '0.4rem',
+            borderTop: '1px dashed rgba(255,255,255,0.06)',
+            paddingTop: '0.4rem',
+          }}
+        >
+          <span style={{ color: '#94a3b8' }}>Approved redemption gates:</span>
+          <div style={{ paddingLeft: '0.5rem', marginTop: '2px' }}>
+            <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Send-shares:</div>
+            {Array.isArray(config.approvedSendSharesGates) &&
+            config.approvedSendSharesGates.length > 0 ? (
+              config.approvedSendSharesGates.map((g: string, i: number) => (
+                <div
+                  key={i}
+                  style={{
+                    paddingLeft: '0.5rem',
+                    fontFamily: 'monospace',
+                    fontSize: '0.75rem',
+                    color: '#cbd5e1',
+                  }}
+                >
+                  {shorten(g, 10, 6)}
+                </div>
+              ))
+            ) : (
+              <div style={{ paddingLeft: '0.5rem', color: '#f59e0b', fontSize: '0.75rem' }}>
+                None beyond address(0)
+              </div>
+            )}
+            <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '2px' }}>
+              Receive-assets:
+            </div>
+            {Array.isArray(config.approvedReceiveAssetsGates) &&
+            config.approvedReceiveAssetsGates.length > 0 ? (
+              config.approvedReceiveAssetsGates.map((g: string, i: number) => (
+                <div
+                  key={i}
+                  style={{
+                    paddingLeft: '0.5rem',
+                    fontFamily: 'monospace',
+                    fontSize: '0.75rem',
+                    color: '#cbd5e1',
+                  }}
+                >
+                  {shorten(g, 10, 6)}
+                </div>
+              ))
+            ) : (
+              <div style={{ paddingLeft: '0.5rem', color: '#f59e0b', fontSize: '0.75rem' }}>
+                None beyond address(0)
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Rules({
   evidence,
   openRule,
@@ -425,23 +600,7 @@ function Rules({
                       V2 Multi-Policy
                     </span>
                     {liveRule.policy_config_json ? (
-                      <div style={{ marginTop: '0.5rem', color: '#94a3b8' }}>
-                        {Boolean(
-                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 1n,
-                        ) && <div>✓ Management fee ceiling configured</div>}
-                        {Boolean(
-                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 2n,
-                        ) && <div>✓ Performance fee ceiling configured</div>}
-                        {Boolean(
-                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 4n,
-                        ) && <div>✓ Relative cap ceilings configured</div>}
-                        {Boolean(
-                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 8n,
-                        ) && <div>✓ Adapter allowlist configured</div>}
-                        {Boolean(
-                          BigInt(String(liveRule.policy_config_json.policyFlags ?? '0')) & 16n,
-                        ) && <div>✓ Redemption gate allowlists configured</div>}
-                      </div>
+                      <PolicySummaryView config={liveRule.policy_config_json} />
                     ) : null}
                   </div>
                 ) : (
@@ -842,12 +1001,13 @@ function RuleDrawer({
             }}
           >
             <strong style={{ display: 'block', marginBottom: '0.25rem', color: '#fbbf24' }}>
-              Active Mandate Detected (Migration Notice)
+              Active Mandate Detected (Separate Guard Notice)
             </strong>
             <span>
-              An active mandate is already registered for this position. Arming a new mandate
-              replaces authorization in the guard, but please ensure previous allowances are managed
-              so two guards do not simultaneously authorize exits on the same shares.
+              An active mandate is already active on this position. V1 and V2 operate under separate
+              guard contracts; arming a V2 mandate does not automatically cancel an authorization in
+              the V1 guard. For clean demo operation, use a fresh depositor position or cancel the
+              prior mandate to avoid concurrent share allowances.
             </span>
           </div>
         ) : null}
@@ -867,18 +1027,10 @@ function RuleDrawer({
             Vault address
             <input value={wallet.position?.position.vault ?? evidence.position.vault} readOnly />
           </label>
+
           <div className="form-grid">
             <label>
-              Management fee ceiling (%)
-              <input
-                onChange={(event) => updateDraft('feePercent', event.target.value)}
-                inputMode="decimal"
-                readOnly={!isNew}
-                value={isNew ? draft.feePercent : evidence.instruction.feeCeiling.replace('%', '')}
-              />
-            </label>
-            <label>
-              Shares to exit
+              Shares to exit ({wallet.position?.position.shareSymbol ?? 'shares'})
               <input
                 onChange={(event) => updateDraft('shares', event.target.value)}
                 inputMode="decimal"
@@ -886,206 +1038,8 @@ function RuleDrawer({
                 value={isNew ? draft.shares : evidence.instruction.shares}
               />
             </label>
-          </div>
-
-          <details className="policy-accordion" open={false}>
-            <summary>
-              <strong>Additional Vault Policies (V2)</strong>
-              <small>
-                Configure ceilings for performance fees, relative caps, adapters, and gates
-              </small>
-            </summary>
-
-            <div className="policy-section">
-              <label>
-                <strong>Performance fee ceiling (%)</strong>
-                <input
-                  inputMode="decimal"
-                  placeholder="e.g. 15.0"
-                  readOnly={!isNew}
-                  value={draft.performanceFeePercent ?? ''}
-                  onChange={(e) => {
-                    updateDraft('performanceFeePercent', e.target.value);
-                    if (e.target.value)
-                      setDraft((cur) => ({ ...cur, performanceFeeEnabled: true }));
-                  }}
-                />
-                <small>Fee charged on yield/performance, capped by protocol at 50%.</small>
-              </label>
-            </div>
-
-            <div className="policy-section">
-              <label>
-                <strong>Relative cap ceilings (risk ID & max %)</strong>
-                <small style={{ display: 'block', marginBottom: '0.5rem' }}>
-                  Limits what the vault may permit for configured risk IDs; it does not claim
-                  current allocation equals the cap.
-                </small>
-              </label>
-              {relativeCapRows.map((row, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    gap: '0.5rem',
-                    marginBottom: '0.5rem',
-                    alignItems: 'center',
-                  }}
-                >
-                  <input
-                    placeholder="Risk ID (0x... 32 bytes)"
-                    value={row.riskId}
-                    readOnly={!isNew}
-                    onChange={(e) => {
-                      const updated = [...relativeCapRows];
-                      updated[idx] = { ...updated[idx], riskId: e.target.value };
-                      setRelativeCapRows(updated);
-                      setDraft((cur) => ({
-                        ...cur,
-                        relativeCaps: updated,
-                        relativeCapEnabled: true,
-                      }));
-                    }}
-                    style={{ flex: 2, fontFamily: 'monospace', fontSize: '0.8rem' }}
-                  />
-                  <input
-                    placeholder="Max % (0-100)"
-                    value={row.maxRelativeCapPercent}
-                    readOnly={!isNew}
-                    onChange={(e) => {
-                      const updated = [...relativeCapRows];
-                      updated[idx] = { ...updated[idx], maxRelativeCapPercent: e.target.value };
-                      setRelativeCapRows(updated);
-                      setDraft((cur) => ({
-                        ...cur,
-                        relativeCaps: updated,
-                        relativeCapEnabled: true,
-                      }));
-                    }}
-                    style={{ flex: 1 }}
-                  />
-                  {isNew && (
-                    <button
-                      type="button"
-                      className="button button-secondary"
-                      style={{ padding: '0.25rem 0.5rem' }}
-                      onClick={() => {
-                        const updated = relativeCapRows.filter((_, i) => i !== idx);
-                        setRelativeCapRows(updated);
-                        setDraft((cur) => ({
-                          ...cur,
-                          relativeCaps: updated,
-                          relativeCapEnabled: updated.length > 0,
-                        }));
-                      }}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              ))}
-              {isNew && (
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}
-                  onClick={() => {
-                    const updated = [...relativeCapRows, { riskId: '', maxRelativeCapPercent: '' }];
-                    setRelativeCapRows(updated);
-                    setDraft((cur) => ({
-                      ...cur,
-                      relativeCaps: updated,
-                      relativeCapEnabled: true,
-                    }));
-                  }}
-                >
-                  + Add Risk Cap Row
-                </button>
-              )}
-            </div>
-
-            <div className="policy-section">
-              <label>
-                <strong>Approved adapters (allowlist)</strong>
-                <input
-                  placeholder="e.g. 0x1111... (comma-separated)"
-                  readOnly={!isNew}
-                  value={adapterInput}
-                  onChange={(e) => {
-                    setAdapterInput(e.target.value);
-                    const parsed = e.target.value
-                      .split(',')
-                      .map((s) => s.trim())
-                      .filter(Boolean);
-                    setDraft((cur) => ({
-                      ...cur,
-                      approvedAdapters: parsed,
-                      adapterAllowlistEnabled: true,
-                    }));
-                  }}
-                />
-                <small>
-                  An added adapter becomes available to allocators; it does not mean capital has
-                  already moved. An empty allowlist strictly forbids any newly added adapters.
-                </small>
-              </label>
-            </div>
-
-            <div className="policy-section">
-              <label>
-                <strong>Redemption gate allowlists</strong>
-              </label>
-              <label style={{ marginTop: '0.5rem' }}>
-                Approved send-shares gates
-                <input
-                  placeholder="e.g. 0x3333... (comma-separated)"
-                  readOnly={!isNew}
-                  value={sendGateInput}
-                  onChange={(e) => {
-                    setSendGateInput(e.target.value);
-                    const parsed = e.target.value
-                      .split(',')
-                      .map((s) => s.trim())
-                      .filter(Boolean);
-                    setDraft((cur) => ({
-                      ...cur,
-                      approvedSendSharesGates: parsed,
-                      redemptionGateAllowlistEnabled: true,
-                    }));
-                  }}
-                />
-                <small>
-                  Authorized contracts to gate share redemptions. address(0) is implicitly accepted.
-                </small>
-              </label>
-              <label style={{ marginTop: '0.5rem' }}>
-                Approved receive-assets gates
-                <input
-                  placeholder="e.g. 0x4444... (comma-separated)"
-                  readOnly={!isNew}
-                  value={receiveGateInput}
-                  onChange={(e) => {
-                    setReceiveGateInput(e.target.value);
-                    const parsed = e.target.value
-                      .split(',')
-                      .map((s) => s.trim())
-                      .filter(Boolean);
-                    setDraft((cur) => ({
-                      ...cur,
-                      approvedReceiveAssetsGates: parsed,
-                      redemptionGateAllowlistEnabled: true,
-                    }));
-                  }}
-                />
-                <small>
-                  Authorized contracts to gate asset transfers. address(0) is implicitly accepted.
-                </small>
-              </label>
-            </div>
-          </details>
-          <div className="form-grid">
             <label>
-              Minimum return
+              Minimum return ({wallet.position?.position.assetSymbol ?? 'assets'})
               <input
                 onChange={(event) => updateDraft('minimumReturn', event.target.value)}
                 inputMode="decimal"
@@ -1093,8 +1047,11 @@ function RuleDrawer({
                 value={isNew ? draft.minimumReturn : evidence.instruction.minimumReturn}
               />
             </label>
+          </div>
+
+          <div className="form-grid">
             <label>
-              Safety window
+              Safety window (minutes)
               <input
                 onChange={(event) => updateDraft('safetyMinutes', event.target.value)}
                 inputMode="decimal"
@@ -1102,17 +1059,398 @@ function RuleDrawer({
                 value={isNew ? draft.safetyMinutes : evidence.instruction.safetyWindow}
               />
             </label>
+            {isNew ? (
+              <label>
+                Rule expires after (hours)
+                <input
+                  inputMode="numeric"
+                  onChange={(event) => updateDraft('expiresHours', event.target.value)}
+                  value={draft.expiresHours}
+                />
+              </label>
+            ) : null}
           </div>
-          {isNew ? (
-            <label>
-              Rule expires after (hours)
-              <input
-                inputMode="numeric"
-                onChange={(event) => updateDraft('expiresHours', event.target.value)}
-                value={draft.expiresHours}
-              />
-            </label>
-          ) : null}
+
+          {wallet.runtime?.guardVersion === 'v2' ? (
+            <div className="policy-boundaries-container" style={{ margin: '1rem 0' }}>
+              <span className="overline" style={{ color: '#93c5fd' }}>
+                Exit Policy Boundaries (V2 Multi-Policy)
+              </span>
+              <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '0.25rem 0 0.75rem' }}>
+                Enable at least one policy boundary. Disabled policies are omitted from onchain
+                mandate enforcement and will not trigger exit.
+              </p>
+
+              {/* 1. Management Fee */}
+              <div
+                className="policy-card"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  marginBottom: '0.5rem',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    cursor: isNew ? 'pointer' : 'default',
+                    fontWeight: 600,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={draft.managementFeeEnabled ?? true}
+                    disabled={!isNew}
+                    onChange={(e) =>
+                      setDraft((cur) => ({ ...cur, managementFeeEnabled: e.target.checked }))
+                    }
+                  />
+                  <span>Management Fee Ceiling</span>
+                </label>
+                {(draft.managementFeeEnabled ?? true) && (
+                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
+                    <label>
+                      Max annualized fee (%)
+                      <input
+                        inputMode="decimal"
+                        placeholder="e.g. 1.00"
+                        readOnly={!isNew}
+                        value={
+                          isNew
+                            ? (draft.feePercent ?? '1.00')
+                            : evidence.instruction.feeCeiling.replace('%', '')
+                        }
+                        onChange={(e) => updateDraft('feePercent', e.target.value)}
+                      />
+                      <small style={{ color: '#94a3b8' }}>
+                        Protocol maximum is 5.00% annualized. Triggers exit if curator queues a fee
+                        above this ceiling.
+                      </small>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Performance Fee */}
+              <div
+                className="policy-card"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  marginBottom: '0.5rem',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    cursor: isNew ? 'pointer' : 'default',
+                    fontWeight: 600,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={draft.performanceFeeEnabled ?? false}
+                    disabled={!isNew}
+                    onChange={(e) =>
+                      setDraft((cur) => ({
+                        ...cur,
+                        performanceFeeEnabled: e.target.checked,
+                        performanceFeePercent: e.target.checked
+                          ? cur.performanceFeePercent || '10.0'
+                          : cur.performanceFeePercent,
+                      }))
+                    }
+                  />
+                  <span>Performance Fee Ceiling</span>
+                </label>
+                {draft.performanceFeeEnabled && (
+                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
+                    <label>
+                      Max performance fee (%)
+                      <input
+                        inputMode="decimal"
+                        placeholder="e.g. 10.0"
+                        readOnly={!isNew}
+                        value={draft.performanceFeePercent ?? ''}
+                        onChange={(e) => updateDraft('performanceFeePercent', e.target.value)}
+                      />
+                      <small style={{ color: '#94a3b8' }}>
+                        Capped by Morpho protocol at 50% WAD. Triggers exit if curator queues a
+                        performance fee above this ceiling.
+                      </small>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Relative Cap */}
+              <div
+                className="policy-card"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  marginBottom: '0.5rem',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    cursor: isNew ? 'pointer' : 'default',
+                    fontWeight: 600,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={draft.relativeCapEnabled ?? false}
+                    disabled={!isNew}
+                    onChange={(e) =>
+                      setDraft((cur) => ({ ...cur, relativeCapEnabled: e.target.checked }))
+                    }
+                  />
+                  <span>Relative Cap Ceilings</span>
+                </label>
+                {draft.relativeCapEnabled && (
+                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
+                    <small style={{ display: 'block', color: '#94a3b8', marginBottom: '0.5rem' }}>
+                      Limits maximum allocation for configured risk IDs. Unconfigured risk IDs do
+                      not trigger an exit.
+                    </small>
+                    {relativeCapRows.map((row, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          gap: '0.5rem',
+                          marginBottom: '0.5rem',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <input
+                          placeholder="Risk ID (0x... 32 bytes)"
+                          value={row.riskId}
+                          readOnly={!isNew}
+                          onChange={(e) => {
+                            const updated = [...relativeCapRows];
+                            updated[idx] = { ...updated[idx], riskId: e.target.value };
+                            setRelativeCapRows(updated);
+                            setDraft((cur) => ({ ...cur, relativeCaps: updated }));
+                          }}
+                          style={{ flex: 2, fontFamily: 'monospace', fontSize: '0.8rem' }}
+                        />
+                        <input
+                          placeholder="Max % (0-100)"
+                          value={row.maxRelativeCapPercent}
+                          readOnly={!isNew}
+                          onChange={(e) => {
+                            const updated = [...relativeCapRows];
+                            updated[idx] = {
+                              ...updated[idx],
+                              maxRelativeCapPercent: e.target.value,
+                            };
+                            setRelativeCapRows(updated);
+                            setDraft((cur) => ({ ...cur, relativeCaps: updated }));
+                          }}
+                          style={{ flex: 1 }}
+                        />
+                        {isNew && (
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            style={{ padding: '0.25rem 0.5rem' }}
+                            onClick={() => {
+                              const updated = relativeCapRows.filter((_, i) => i !== idx);
+                              setRelativeCapRows(updated);
+                              setDraft((cur) => ({ ...cur, relativeCaps: updated }));
+                            }}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {isNew && (
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        style={{ fontSize: '0.8rem' }}
+                        onClick={() => {
+                          const updated = [
+                            ...relativeCapRows,
+                            { riskId: '', maxRelativeCapPercent: '' },
+                          ];
+                          setRelativeCapRows(updated);
+                          setDraft((cur) => ({ ...cur, relativeCaps: updated }));
+                        }}
+                      >
+                        + Add Risk Cap Row
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Adapter Allowlist */}
+              <div
+                className="policy-card"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  marginBottom: '0.5rem',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    cursor: isNew ? 'pointer' : 'default',
+                    fontWeight: 600,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={draft.adapterAllowlistEnabled ?? false}
+                    disabled={!isNew}
+                    onChange={(e) =>
+                      setDraft((cur) => ({ ...cur, adapterAllowlistEnabled: e.target.checked }))
+                    }
+                  />
+                  <span>Adapter Allowlist</span>
+                </label>
+                {draft.adapterAllowlistEnabled && (
+                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
+                    <label>
+                      Approved adapters (comma-separated)
+                      <input
+                        placeholder="e.g. 0x1111..., 0x2222..."
+                        readOnly={!isNew}
+                        value={adapterInput}
+                        onChange={(e) => {
+                          setAdapterInput(e.target.value);
+                          const parsed = e.target.value
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          setDraft((cur) => ({ ...cur, approvedAdapters: parsed }));
+                        }}
+                      />
+                      <small style={{ color: '#94a3b8' }}>
+                        Strict allowlist: leaving this empty means NO newly added adapter is
+                        approved (any addition triggers an exit).
+                      </small>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* 5. Redemption Gate Allowlist */}
+              <div
+                className="policy-card"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  marginBottom: '0.5rem',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    cursor: isNew ? 'pointer' : 'default',
+                    fontWeight: 600,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={draft.redemptionGateAllowlistEnabled ?? false}
+                    disabled={!isNew}
+                    onChange={(e) =>
+                      setDraft((cur) => ({
+                        ...cur,
+                        redemptionGateAllowlistEnabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Redemption Gate Allowlist</span>
+                </label>
+                {draft.redemptionGateAllowlistEnabled && (
+                  <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
+                    <small style={{ display: 'block', color: '#94a3b8', marginBottom: '0.5rem' }}>
+                      Strict allowlist: empty allowlists mean NO non-zero gate is approved (only
+                      address(0) / un-gated is permitted).
+                    </small>
+                    <label>
+                      Approved send-shares gates
+                      <input
+                        placeholder="e.g. 0x3333..."
+                        readOnly={!isNew}
+                        value={sendGateInput}
+                        onChange={(e) => {
+                          setSendGateInput(e.target.value);
+                          const parsed = e.target.value
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          setDraft((cur) => ({ ...cur, approvedSendSharesGates: parsed }));
+                        }}
+                      />
+                    </label>
+                    <label style={{ marginTop: '0.5rem' }}>
+                      Approved receive-assets gates
+                      <input
+                        placeholder="e.g. 0x4444..."
+                        readOnly={!isNew}
+                        value={receiveGateInput}
+                        onChange={(e) => {
+                          setReceiveGateInput(e.target.value);
+                          const parsed = e.target.value
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          setDraft((cur) => ({ ...cur, approvedReceiveAssetsGates: parsed }));
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="form-grid">
+              <label>
+                Management fee ceiling (%)
+                <input
+                  onChange={(event) => updateDraft('feePercent', event.target.value)}
+                  inputMode="decimal"
+                  readOnly={!isNew}
+                  value={
+                    isNew ? draft.feePercent : evidence.instruction.feeCeiling.replace('%', '')
+                  }
+                />
+                <small style={{ color: '#94a3b8' }}>
+                  V1 legacy guard: management fee ceiling only.
+                </small>
+              </label>
+            </div>
+          )}
+
           <label>
             Receiver
             <input value={wallet.address ?? evidence.position.owner} readOnly />
@@ -1149,16 +1487,33 @@ function RuleDrawer({
                 disabled={
                   working ||
                   !wallet.runtime?.monitoringReady ||
-                  Number(wallet.position?.position.shares ?? '0') <= 0
+                  Number(wallet.position?.position.shares ?? '0') <= 0 ||
+                  (wallet.runtime?.guardVersion === 'v2' &&
+                    !(
+                      draft.managementFeeEnabled ||
+                      draft.performanceFeeEnabled ||
+                      draft.relativeCapEnabled ||
+                      draft.adapterAllowlistEnabled ||
+                      draft.redemptionGateAllowlistEnabled
+                    ))
                 }
                 onClick={() => void wallet.approveAndArm(draft)}
                 type="button"
               >
                 {working
                   ? 'Waiting for owner confirmation…'
-                  : wallet.runtime?.monitoringReady
-                    ? 'Approve shares and arm rule'
-                    : 'Monitoring runtime is unavailable'}
+                  : wallet.runtime?.guardVersion === 'v2' &&
+                      !(
+                        draft.managementFeeEnabled ||
+                        draft.performanceFeeEnabled ||
+                        draft.relativeCapEnabled ||
+                        draft.adapterAllowlistEnabled ||
+                        draft.redemptionGateAllowlistEnabled
+                      )
+                    ? 'Enable at least one policy boundary'
+                    : wallet.runtime?.guardVersion === 'v2'
+                      ? 'Approve shares and arm V2 rule'
+                      : 'Approve shares and arm V1 rule'}
               </button>
             ) : (
               <button

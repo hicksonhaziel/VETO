@@ -44,22 +44,25 @@ export async function GET(request: NextRequest) {
       }),
       client.getBlockNumber(),
     ]);
-    const [assetDecimals, symbol, allowance, assets] = await Promise.all([
-      client.readContract({ address: asset, abi: erc20Abi, functionName: 'decimals' }),
-      client.readContract({ address: asset, abi: erc20Abi, functionName: 'symbol' }),
-      client.readContract({
-        address: config.vault,
-        abi: vaultAbi,
-        functionName: 'allowance',
-        args: [owner, config.guard],
-      }),
-      client.readContract({
-        address: config.vault,
-        abi: vaultAbi,
-        functionName: 'previewRedeem',
-        args: [shares],
-      }),
-    ]);
+    const [shareDecimals, shareSymbol, assetDecimals, assetSymbol, allowance, assets] =
+      await Promise.all([
+        client.readContract({ address: config.vault, abi: vaultAbi, functionName: 'decimals' }),
+        client.readContract({ address: config.vault, abi: vaultAbi, functionName: 'symbol' }),
+        client.readContract({ address: asset, abi: erc20Abi, functionName: 'decimals' }),
+        client.readContract({ address: asset, abi: erc20Abi, functionName: 'symbol' }),
+        client.readContract({
+          address: config.vault,
+          abi: vaultAbi,
+          functionName: 'allowance',
+          args: [owner, config.guard],
+        }),
+        client.readContract({
+          address: config.vault,
+          abi: vaultAbi,
+          functionName: 'previewRedeem',
+          args: [shares],
+        }),
+      ]);
     const mandateId = encodedMandateId > 0n ? encodedMandateId - 1n : undefined;
     const isV2 = config.guardVersion === 'v2';
     const mandate =
@@ -140,14 +143,26 @@ export async function GET(request: NextRequest) {
         owner,
         vault: config.vault,
         asset,
-        symbol,
-        decimals: assetDecimals,
         supported,
-        shares: shares.toString(),
-        sharesFormatted: formatUnits(shares, assetDecimals),
-        assets: assets.toString(),
+
+        sharesRaw: shares.toString(),
+        sharesFormatted: formatUnits(shares, shareDecimals),
+        shareDecimals,
+        shareSymbol,
+
+        assetsRaw: assets.toString(),
         assetsFormatted: formatUnits(assets, assetDecimals),
+        assetDecimals,
+        assetSymbol,
+
+        // Aliases for compatibility
+        shares: shares.toString(),
+        assets: assets.toString(),
+        decimals: assetDecimals,
+        symbol: assetSymbol,
         allowance: allowance.toString(),
+        allowanceFormatted: formatUnits(allowance, shareDecimals),
+        needsAllowance: allowance < shares,
       },
       mandate: formattedMandate,
       contracts: {

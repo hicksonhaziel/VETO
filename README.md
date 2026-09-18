@@ -37,27 +37,27 @@ Protocols have governance. VETO gives depositors control over whether their capi
 
 ## What VETO does today
 
-The first implemented policy is a **management-fee ceiling**:
+VETO V2 supports **five programmable Morpho Vault V2 policy families**:
+
+1. **Management-fee ceiling** (`setManagementFee`): Maximum acceptable annual management fee rate (strictly `< 5.00%` protocol max).
+2. **Performance-fee ceiling** (`setPerformanceFee`): Maximum acceptable performance fee percentage (up to `50.00%` protocol max).
+3. **Relative-cap ceiling** (`increaseRelativeCap`): Market exposure ceiling for explicitly configured `bytes32` risk IDs (unconfigured risk IDs do not breach).
+4. **Adapter allowlist** (`addAdapter`): Explicit set of authorized adapter addresses (unapproved adapter proposals breach immediately).
+5. **Redemption-gate allowlist** (`setSendSharesGate`, `setReceiveAssetsGate`): Explicit set of authorized share-transfer and asset-distribution gates.
 
 ```text
-queued management fee > owner's ceiling
-    -> verify the exact proposal
-    -> persist one bounded exit intent
-    -> KeeperHub reads the exact proposal state and conditionally submits the guard call
-    -> guard rechecks the mandate and proposal onchain
-    -> redeem the approved shares directly to the owner
-    -> reconcile the receipt, event, and consumed mandate
+queued vault change breaches depositor policy
+    -> verify the exact proposal calldata against enabled policy rules
+    -> persist one bounded exit intent in PostgreSQL
+    -> KeeperHub reads the live proposal state and conditionally executes VetoExitGuardV2
+    -> guard rechecks the multi-policy mandate and live proposal onchain
+    -> redeem the approved shares directly to the owner (zero custody)
+    -> reconcile receipt, Exited event, and consumed mandate
 ```
 
-Morpho exposes this change as deterministic queued calldata with a scheduled execution time. That
-makes it suitable for an exact machine-verifiable first rule. Crossing the ceiling means the
-depositor's predefined policy was violated; it does **not** imply the curator is malicious or that
-liquidation or loss was imminent. For a small position, the cost of exiting and redeploying may be
-greater than the fee difference.
+Morpho exposes these governance actions as deterministic queued calldata with scheduled execution times. That makes each policy exactly machine-verifiable. Crossing an authorized ceiling or proposing an unlisted adapter/gate means the depositor's predefined policy was violated; it does **not** imply the curator is malicious or that liquidation was imminent.
 
-Management fee is the demonstrated predicate, not the limit of the VETO thesis. Any later policy
-class must first be verified against actual protocol semantics before it can join the authorization
-path.
+Historical V1 contracts and public Base Sepolia KeeperHub conditional proofs (`VetoExitGuard.sol`, Day 5/6/8 receipts) remain preserved as permanent public verification evidence. V2 (`VetoExitGuardV2.sol`) expands protection across all five governance surfaces with bitflag policy activation (`policyFlags`), atomic single-use mandate consumption, and TOCTOU defense.
 
 ## Why the guard exists
 
@@ -226,20 +226,22 @@ wallet that holds shares in the configured controlled Base Sepolia vault.
 
 ## Repository map
 
-| Path                                                                     | Purpose                                                          |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| [`contracts/src/VetoExitGuard.sol`](contracts/src/VetoExitGuard.sol)     | Owner mandate and execution-time policy enforcement              |
-| [`contracts/test/base-fork.test.mjs`](contracts/test/base-fork.test.mjs) | Pinned real Morpho redemption and adverse checks                 |
-| [`packages/morpho-v2/src/scanner.ts`](packages/morpho-v2/src/scanner.ts) | Canonical proposal lifecycle decoding                            |
-| [`packages/morpho-v2/src/adapter.ts`](packages/morpho-v2/src/adapter.ts) | Proposal eligibility against live vault state                    |
-| [`packages/keeperhub/src/client.ts`](packages/keeperhub/src/client.ts)   | Simulation, submission, retries, and status normalization        |
-| [`apps/worker/src/scanner.ts`](apps/worker/src/scanner.ts)               | Mandate-aware scanning and durable decisions                     |
-| [`apps/worker/src/pipeline.ts`](apps/worker/src/pipeline.ts)             | KeeperHub execution state machine and recovery                   |
-| [`apps/worker/src/reconcile.ts`](apps/worker/src/reconcile.ts)           | Independent receipt and mandate reconciliation                   |
-| [`apps/worker/src/store.ts`](apps/worker/src/store.ts)                   | PostgreSQL uniqueness, leases, transitions, and checkpoints      |
-| [`apps/web/src/app`](apps/web/src/app)                                   | Owner controls, runtime APIs, outcome, activity, and evidence UI |
-| [`evidence`](evidence)                                                   | Public receipts, screenshots, raw facts, and claim boundaries    |
-| [`docs`](docs)                                                           | Chronological gate reports and current functional-layer notes    |
+| Path                                                                                                           | Purpose                                                             |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [`contracts/src/VetoExitGuardV2.sol`](contracts/src/VetoExitGuardV2.sol)                                       | V2 multi-policy owner mandate and execution-time policy enforcement |
+| [`contracts/src/VetoExitGuard.sol`](contracts/src/VetoExitGuard.sol)                                           | Historical V1 owner mandate guard (Day 5/6/8 public proofs)         |
+| [`contracts/test/v2-gauntlet-fork-performance.test.mjs`](contracts/test/v2-gauntlet-fork-performance.test.mjs) | Pinned Gauntlet Base fork V2 performance fee proof                  |
+| [`contracts/test/base-fork.test.mjs`](contracts/test/base-fork.test.mjs)                                       | Pinned real Morpho V1 redemption and adverse checks                 |
+| [`packages/morpho-v2/src/scanner.ts`](packages/morpho-v2/src/scanner.ts)                                       | Canonical proposal lifecycle decoding across all 5 policy families  |
+| [`packages/morpho-v2/src/adapter.ts`](packages/morpho-v2/src/adapter.ts)                                       | Proposal eligibility against live vault state                       |
+| [`packages/keeperhub/src/client.ts`](packages/keeperhub/src/client.ts)                                         | Simulation, submission, retries, and status normalization           |
+| [`apps/worker/src/scanner.ts`](apps/worker/src/scanner.ts)                                                     | Mandate-aware scanning and durable decisions                        |
+| [`apps/worker/src/pipeline.ts`](apps/worker/src/pipeline.ts)                                                   | KeeperHub execution state machine and recovery                      |
+| [`apps/worker/src/reconcile.ts`](apps/worker/src/reconcile.ts)                                                 | Independent receipt and mandate reconciliation                      |
+| [`apps/worker/src/store.ts`](apps/worker/src/store.ts)                                                         | PostgreSQL uniqueness, leases, transitions, and checkpoints         |
+| [`apps/web/src/app`](apps/web/src/app)                                                                         | Owner controls, runtime APIs, outcome, activity, and evidence UI    |
+| [`evidence`](evidence)                                                                                         | Public receipts, screenshots, raw facts, and claim boundaries       |
+| [`docs`](docs)                                                                                                 | Chronological gate reports and current functional-layer notes       |
 
 ## Run and test
 
@@ -280,7 +282,7 @@ funded-wallet secrets.
 
 ## Limitations
 
-- Management-fee ceiling is the only implemented exit policy.
+- VETO V2 implements five Morpho Vault V2 policy families (management fee ceiling, performance fee ceiling, relative cap ceiling, adapter allowlist, and redemption gate allowlist).
 - The contracts are unaudited, test-only, and not production-ready.
 - The public end-to-end proof uses canonical Morpho Vault V2 code with a valueless test asset on
   Base Sepolia, not real USDC.
@@ -289,7 +291,7 @@ funded-wallet secrets.
 - Compatibility and adverse behavior against a Morpho mainnet deployment remain pinned-fork
   evidence; no public mainnet asset movement is claimed.
 - Glacient webhook delivery and payload authentication are not integrated.
-- The web runtime supports one configured factory, vault, and guard on Base Sepolia.
+- The web runtime supports configured factory, vault, and guard on Base Sepolia.
 - VETO can enforce **when an exit is authorized**. It cannot guarantee that a vault has enough
   executable liquidity to complete it.
 - P0 has no automatic partial exit. If the exact authorized redemption reverts, the position is
@@ -302,7 +304,4 @@ funded-wallet secrets.
 
 ## Vision
 
-The management-fee ceiling is the first narrow proof of a broader primitive: **user-defined
-conditions controlling whether capital remains in a managed protocol**. Other governance or risk
-changes may become future policy classes only after their exact Morpho semantics, timing,
-authorization surface, liquidity behavior, and guard enforcement are independently verified.
+VETO's multi-policy engine demonstrates a foundational primitive: **user-defined conditions controlling whether capital remains in a managed protocol**. Across fee limits, market exposure allocations, and contract allowlists, depositors retain cryptographic authority to leave before adverse changes take effect.

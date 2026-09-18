@@ -61,7 +61,7 @@ VETO provides programmable depositor governance protection across five Morpho Va
 - **Function Signature:** `increaseRelativeCap(bytes id, uint256 newCap)`
 - **Live State:** Active timelocked governance function for market allocation adjustments.
 - **Live Timelock:** 259,200 seconds (72 hours).
-- **VETO Guard Enforcement:** Onchain guard reads `hasRelativeCapByMandateRisk(mandateId, riskId)` and `maxRelativeCapByMandateRisk(mandateId, riskId)`. If the risk ID is unconfigured, or the proposed cap exceeds the limit, the guard permits emergency exit.
+- **VETO Guard Enforcement:** Onchain guard reads `hasRelativeCapByMandateRisk(mandateId, riskId)` and `maxRelativeCapByMandateRisk(mandateId, riskId)`. Only explicitly configured risk IDs whose proposed cap exceeds the configured ceiling breach policy and permit emergency exit; unconfigured risk IDs do NOT trigger an exit (`CapDoesNotBreachLimit`).
 - **Proof Mechanism:** `relative-cap-pipeline.test.ts` proves exact decoding of arbitrary bytes/bytes32 market risk identifiers and conditional KeeperHub exit triggering upon cap breach.
 
 ### Policy 4: Adapter Allowlist
