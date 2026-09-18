@@ -10,11 +10,15 @@ import {
 
 import {
   decodeManagementFee,
+  decodePerformanceFee,
   setManagementFeeSelector,
+  setPerformanceFeeSelector,
   type ManagementFeeProposal,
+  type VaultProposal,
 } from './scanner.js';
 
 export const maxManagementFeePerSecond = 50_000_000_000_000_000n / 31_536_000n;
+export const maxPerformanceFeeWadProtocol = 500_000_000_000_000_000n; // 0.5e18 = 50%
 
 const factoryReadAbi = [
   {
@@ -44,6 +48,13 @@ const vaultVerificationAbi = [
   {
     type: 'function',
     name: 'managementFeeRecipient',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'performanceFeeRecipient',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'address' }],
@@ -210,7 +221,184 @@ export async function verifyManagementFeeProposal<
   });
 }
 
-export function proposalIdentity(chainId: number, proposal: ManagementFeeProposal): string {
+export type PerformanceFeeAssessmentReason =
+  | 'eligible'
+  | 'unsupported-vault'
+  | 'unsupported-proposal'
+  | 'policy-disabled'
+  | 'fee-within-owner-limit'
+  | 'fee-exceeds-protocol-limit'
+  | 'setter-abdicated'
+  | 'missing-fee-recipient'
+  | 'proposal-cleared'
+  | 'proposal-changed'
+  | 'exit-window-closed';
+
+export type PerformanceFeeSnapshot = {
+  factoryApproved: boolean;
+  abdicated: boolean;
+  performanceFeeRecipient: Address;
+  executableAt: bigint;
+  observedAt: bigint;
+};
+
+export type PerformanceFeeAssessment = {
+  eligible: boolean;
+  reason: PerformanceFeeAssessmentReason;
+  proposalHash: Hex;
+  proposedFee?: bigint;
+  executableAt?: bigint;
+  remainingSeconds?: bigint;
+};
+
+export function assessPerformanceFeeProposal(options: {
+  data: Hex;
+  maxPerformanceFeeWad: bigint;
+  safetySeconds: bigint;
+  expectedExecutableAt: bigint;
+  snapshot: PerformanceFeeSnapshot;
+  policyEnabled?: boolean;
+}): PerformanceFeeAssessment {
+  const {
+    data,
+    maxPerformanceFeeWad,
+    safetySeconds,
+    expectedExecutableAt,
+    snapshot,
+    policyEnabled = true,
+  } = options;
+  const proposalHash = keccak256(data);
+  const proposedFee = decodePerformanceFee(data);
+  const result = (
+    reason: PerformanceFeeAssessmentReason,
+    extras: Partial<PerformanceFeeAssessment> = {},
+  ): PerformanceFeeAssessment => ({
+    eligible: reason === 'eligible',
+    reason,
+    proposalHash,
+    proposedFee,
+    executableAt: snapshot.executableAt,
+    ...extras,
+  });
+
+  if (!snapshot.factoryApproved) return result('unsupported-vault');
+  if (proposedFee === undefined) return result('unsupported-proposal');
+  if (!policyEnabled) return result('policy-disabled');
+  if (proposedFee <= maxPerformanceFeeWad) return result('fee-within-owner-limit');
+  if (proposedFee > maxPerformanceFeeWadProtocol) return result('fee-exceeds-protocol-limit');
+  if (snapshot.abdicated) return result('setter-abdicated');
+  if (snapshot.performanceFeeRecipient === '0x0000000000000000000000000000000000000000') {
+    return result('missing-fee-recipient');
+  }
+  if (snapshot.executableAt === 0n) return result('proposal-cleared');
+  if (snapshot.executableAt !== expectedExecutableAt) return result('proposal-changed');
+  if (snapshot.executableAt <= snapshot.observedAt) {
+    return result('exit-window-closed', { remainingSeconds: 0n });
+  }
+
+  const remainingSeconds = snapshot.executableAt - snapshot.observedAt;
+  if (remainingSeconds <= safetySeconds) {
+    return result('exit-window-closed', { remainingSeconds });
+  }
+  return result('eligible', { remainingSeconds });
+}
+
+export async function verifyPerformanceFeeProposal<
+  TTransport extends Transport,
+  TChain extends Chain | undefined,
+>(options: {
+  client: PublicClient<TTransport, TChain>;
+  factory: Address;
+  vault: Address;
+  data: Hex;
+  maxPerformanceFeeWad: bigint;
+  safetySeconds: bigint;
+  expectedExecutableAt: bigint;
+  policyEnabled?: boolean;
+  blockNumber?: bigint;
+}): Promise<PerformanceFeeAssessment> {
+  const {
+    client,
+    factory,
+    vault,
+    data,
+    maxPerformanceFeeWad,
+    safetySeconds,
+    expectedExecutableAt,
+    policyEnabled = true,
+    blockNumber,
+  } = options;
+  const [factoryApproved, block] = await Promise.all([
+    client.readContract({
+      address: factory,
+      abi: factoryReadAbi,
+      functionName: 'isVaultV2',
+      args: [vault],
+      blockNumber,
+    }),
+    client.getBlock({ blockNumber }),
+  ]);
+
+  if (!factoryApproved) {
+    return assessPerformanceFeeProposal({
+      data,
+      maxPerformanceFeeWad,
+      safetySeconds,
+      expectedExecutableAt,
+      policyEnabled,
+      snapshot: {
+        factoryApproved,
+        abdicated: false,
+        performanceFeeRecipient: '0x0000000000000000000000000000000000000000',
+        executableAt: 0n,
+        observedAt: block.timestamp,
+      },
+    });
+  }
+
+  const [executableAt, abdicated, performanceFeeRecipient] = await Promise.all([
+    client.readContract({
+      address: vault,
+      abi: vaultVerificationAbi,
+      functionName: 'executableAt',
+      args: [data],
+      blockNumber,
+    }),
+    client.readContract({
+      address: vault,
+      abi: vaultVerificationAbi,
+      functionName: 'abdicated',
+      args: [setPerformanceFeeSelector],
+      blockNumber,
+    }),
+    client.readContract({
+      address: vault,
+      abi: vaultVerificationAbi,
+      functionName: 'performanceFeeRecipient',
+      blockNumber,
+    }),
+  ]);
+
+  return assessPerformanceFeeProposal({
+    data,
+    maxPerformanceFeeWad,
+    safetySeconds,
+    expectedExecutableAt,
+    policyEnabled,
+    snapshot: {
+      factoryApproved,
+      abdicated,
+      performanceFeeRecipient: getAddress(performanceFeeRecipient),
+      executableAt,
+      observedAt: block.timestamp,
+    },
+  });
+}
+
+export function proposalIdentity(
+  chainId: number,
+  proposal: { vault: Address; data: Hex; submittedAtBlock: bigint; submitLogIndex: number },
+): string {
   return [
     chainId,
     getAddress(proposal.vault),

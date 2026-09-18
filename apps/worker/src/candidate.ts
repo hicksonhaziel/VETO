@@ -1,7 +1,15 @@
 import { financialOperationKey, type ReadyExitIntent } from '@veto/core';
 import { keeperHubIdempotencyKey } from '@veto/keeperhub';
-import type { ManagementFeeAssessment } from '@veto/morpho-v2';
+import type { ManagementFeeAssessment, PerformanceFeeAssessment } from '@veto/morpho-v2';
 import type { Address, Hex } from 'viem';
+
+export type ProposalAssessment =
+  | ManagementFeeAssessment
+  | PerformanceFeeAssessment
+  | {
+      eligible: boolean;
+      reason: string;
+    };
 
 export const exitGuardExecuteAbi = [
   {
@@ -25,7 +33,7 @@ export function buildReadyExitIntent(options: {
   proposalIdentity: string;
   proposalData: Hex;
   expectedExecutableAt: bigint;
-  assessment: ManagementFeeAssessment;
+  assessment: ProposalAssessment;
   executionMode?: 'direct' | 'conditional';
 }): ReadyExitIntent {
   if (!options.assessment.eligible || options.assessment.reason !== 'eligible') {

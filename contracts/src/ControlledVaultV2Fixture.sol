@@ -44,12 +44,15 @@ contract FixtureAsset {
 /// @notice Test-only subset of Vault V2 proposal and redemption behavior used for KeeperHub evidence.
 contract ControlledVaultV2Fixture {
     bytes4 public constant SET_MANAGEMENT_FEE_SELECTOR = bytes4(keccak256("setManagementFee(uint256)"));
+    bytes4 public constant SET_PERFORMANCE_FEE_SELECTOR = 0x70897b23;
 
     FixtureAsset public immutable asset;
     address public immutable curator;
     address public immutable managementFeeRecipient;
+    address public immutable performanceFeeRecipient;
     uint256 public immutable managementFeeTimelock;
     uint256 public managementFee;
+    uint256 public performanceFee;
 
     mapping(address account => uint256) public balanceOf;
     mapping(address owner => mapping(address spender => uint256)) public allowance;
@@ -71,6 +74,7 @@ contract ControlledVaultV2Fixture {
     constructor(address owner, address asset_, uint256 timelock_) {
         curator = owner;
         managementFeeRecipient = owner;
+        performanceFeeRecipient = owner;
         asset = FixtureAsset(asset_);
         managementFeeTimelock = timelock_;
     }
@@ -86,7 +90,9 @@ contract ControlledVaultV2Fixture {
     function submit(bytes calldata data) external {
         require(msg.sender == curator, "not curator");
         bytes4 selector = bytes4(data);
-        require(selector == SET_MANAGEMENT_FEE_SELECTOR && data.length == 36, "unsupported");
+        bool supported = (selector == SET_MANAGEMENT_FEE_SELECTOR && data.length == 36)
+            || (selector == SET_PERFORMANCE_FEE_SELECTOR && data.length == 36);
+        require(supported, "unsupported");
         bytes32 proposalHash = keccak256(data);
         require(proposalExecutableAt[proposalHash] == 0, "already pending");
         uint256 when = block.timestamp + managementFeeTimelock;
@@ -110,6 +116,16 @@ contract ControlledVaultV2Fixture {
         proposalExecutableAt[proposalHash] = 0;
         managementFee = newManagementFee;
         emit Accept(SET_MANAGEMENT_FEE_SELECTOR, data);
+    }
+
+    function setPerformanceFee(uint256 newPerformanceFee) external {
+        bytes memory data = abi.encodeCall(this.setPerformanceFee, (newPerformanceFee));
+        bytes32 proposalHash = keccak256(data);
+        uint256 when = proposalExecutableAt[proposalHash];
+        require(when != 0 && block.timestamp >= when, "not executable");
+        proposalExecutableAt[proposalHash] = 0;
+        performanceFee = newPerformanceFee;
+        emit Accept(SET_PERFORMANCE_FEE_SELECTOR, data);
     }
 
     function approve(address spender, uint256 shares) external returns (bool) {

@@ -1,8 +1,11 @@
 import { financialOperationKey } from '@veto/core';
 import {
   proposalIdentity,
-  scanManagementFeeProposals,
+  scanVaultProposals,
+  setManagementFeeSelector,
+  setPerformanceFeeSelector,
   verifyManagementFeeProposal,
+  verifyPerformanceFeeProposal,
 } from '@veto/morpho-v2';
 import { getAddress, type Address, type Chain, type PublicClient, type Transport } from 'viem';
 
@@ -28,6 +31,27 @@ const guardReadAbi = [
   },
 ] as const;
 
+const guardV2ReadAbi = [
+  {
+    type: 'function',
+    name: 'mandates',
+    stateMutability: 'view',
+    inputs: [{ name: 'mandateId', type: 'uint256' }],
+    outputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'vault', type: 'address' },
+      { name: 'shares', type: 'uint256' },
+      { name: 'minAssets', type: 'uint256' },
+      { name: 'expiresAt', type: 'uint256' },
+      { name: 'safetySeconds', type: 'uint256' },
+      { name: 'active', type: 'bool' },
+      { name: 'policyFlags', type: 'uint256' },
+      { name: 'maxManagementFee', type: 'uint256' },
+      { name: 'maxPerformanceFee', type: 'uint256' },
+    ],
+  },
+] as const;
+
 const MAX_LOG_BLOCK_RANGE = 9_999n;
 
 function assessmentJson(value: object): Record<string, unknown> {
@@ -48,6 +72,7 @@ export type MorphoScannerConfig = {
   confirmationDepth: bigint;
   reorgRewindBlocks: bigint;
   executionMode?: 'direct' | 'conditional';
+  guardVersion?: 'v1' | 'v2';
 };
 
 export type ScanResult = {
@@ -105,14 +130,45 @@ export async function scanConfiguredMandate<
     };
   }
 
-  const mandate = await client.readContract({
-    address: config.guard,
-    abi: guardReadAbi,
-    functionName: 'mandates',
-    args: [config.mandateId],
-    blockNumber: toBlock,
-  });
-  const proposals = await scanManagementFeeProposals({
+  let mandateOwner: Address;
+  let mandateVault: Address;
+  let mandateSafetySeconds: bigint;
+  let mandateActive: boolean;
+  let policyFlags: bigint = 1n; // default V1 is management fee
+  let maxManagementFee: bigint = 0n;
+  let maxPerformanceFee: bigint = 0n;
+
+  if (config.guardVersion === 'v2') {
+    const mandateV2 = await client.readContract({
+      address: config.guard,
+      abi: guardV2ReadAbi,
+      functionName: 'mandates',
+      args: [config.mandateId],
+      blockNumber: toBlock,
+    });
+    mandateOwner = mandateV2[0];
+    mandateVault = mandateV2[1];
+    mandateSafetySeconds = mandateV2[5];
+    mandateActive = mandateV2[6];
+    policyFlags = mandateV2[7];
+    maxManagementFee = mandateV2[8];
+    maxPerformanceFee = mandateV2[9];
+  } else {
+    const mandateV1 = await client.readContract({
+      address: config.guard,
+      abi: guardReadAbi,
+      functionName: 'mandates',
+      args: [config.mandateId],
+      blockNumber: toBlock,
+    });
+    mandateOwner = mandateV1[0];
+    mandateVault = mandateV1[1];
+    maxManagementFee = mandateV1[3];
+    mandateSafetySeconds = mandateV1[6];
+    mandateActive = mandateV1[7];
+  }
+
+  const proposals = await scanVaultProposals({
     client,
     vault: config.vault,
     fromBlock,
@@ -132,38 +188,60 @@ export async function scanConfiguredMandate<
     let decision: string = proposal.status;
     let assessment: Record<string, unknown> = { status: proposal.status };
 
-    if (!mandate[7]) {
+    if (!mandateActive) {
       decision = 'mandate-inactive';
       assessment = { status: proposal.status, active: false };
-    } else if (getAddress(mandate[1]) !== getAddress(config.vault)) {
+    } else if (getAddress(mandateVault) !== getAddress(config.vault)) {
       decision = 'mandate-vault-mismatch';
-      assessment = { status: proposal.status, mandateVault: mandate[1] };
+      assessment = { status: proposal.status, mandateVault };
     } else if (proposal.status === 'pending') {
-      const verified = await verifyManagementFeeProposal({
-        client,
-        factory: config.factory,
-        vault: config.vault,
-        data: proposal.data,
-        maxFeePerSecond: mandate[3],
-        safetySeconds: mandate[6],
-        expectedExecutableAt: proposal.executableAt,
-        blockNumber: toBlock,
-      });
-      decision = verified.reason;
-      assessment = assessmentJson(verified);
-      if (verified.eligible) {
-        const ready = buildReadyExitIntent({
-          chainId: config.chainId,
+      let verified: { eligible: boolean; reason: string } | undefined;
+
+      if (proposal.selector.toLowerCase() === setManagementFeeSelector.toLowerCase()) {
+        verified = await verifyManagementFeeProposal({
+          client,
+          factory: config.factory,
           vault: config.vault,
-          guard: config.guard,
-          mandateId: config.mandateId,
-          proposalIdentity: identity,
-          proposalData: proposal.data,
+          data: proposal.data,
+          maxFeePerSecond: maxManagementFee,
+          safetySeconds: mandateSafetySeconds,
           expectedExecutableAt: proposal.executableAt,
-          assessment: verified,
-          executionMode: config.executionMode,
+          blockNumber: toBlock,
         });
-        if (await store.createReady(ready)) readyCreated += 1;
+      } else if (proposal.selector.toLowerCase() === setPerformanceFeeSelector.toLowerCase()) {
+        verified = await verifyPerformanceFeeProposal({
+          client,
+          factory: config.factory,
+          vault: config.vault,
+          data: proposal.data,
+          maxPerformanceFeeWad: maxPerformanceFee,
+          safetySeconds: mandateSafetySeconds,
+          expectedExecutableAt: proposal.executableAt,
+          policyEnabled: (policyFlags & 2n) !== 0n,
+          blockNumber: toBlock,
+        });
+      } else {
+        decision = 'unsupported-proposal';
+        assessment = { status: proposal.status, selector: proposal.selector };
+      }
+
+      if (verified) {
+        decision = verified.reason;
+        assessment = assessmentJson(verified);
+        if (verified.eligible) {
+          const ready = buildReadyExitIntent({
+            chainId: config.chainId,
+            vault: config.vault,
+            guard: config.guard,
+            mandateId: config.mandateId,
+            proposalIdentity: identity,
+            proposalData: proposal.data,
+            expectedExecutableAt: proposal.executableAt,
+            assessment: verified,
+            executionMode: config.executionMode,
+          });
+          if (await store.createReady(ready)) readyCreated += 1;
+        }
       }
     }
 
