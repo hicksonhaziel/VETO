@@ -1,11 +1,14 @@
 import { financialOperationKey } from '@veto/core';
 import {
+  addAdapterSelector,
+  decodeAddAdapter,
   decodeIncreaseRelativeCap,
   increaseRelativeCapSelector,
   proposalIdentity,
   scanVaultProposals,
   setManagementFeeSelector,
   setPerformanceFeeSelector,
+  verifyAdapterProposal,
   verifyManagementFeeProposal,
   verifyPerformanceFeeProposal,
   verifyRelativeCapProposal,
@@ -72,6 +75,16 @@ const guardV2ReadAbi = [
       { name: 'riskId', type: 'bytes32' },
     ],
     outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'approvedAdapterByMandate',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'mandateId', type: 'uint256' },
+      { name: 'adapter', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
   },
 ] as const;
 
@@ -279,6 +292,34 @@ export async function scanConfiguredMandate<
             safetySeconds: mandateSafetySeconds,
             expectedExecutableAt: proposal.executableAt,
             policyEnabled: (policyFlags & 4n) !== 0n,
+            blockNumber: toBlock,
+          });
+        }
+      } else if (proposal.selector.toLowerCase() === addAdapterSelector.toLowerCase()) {
+        const decoded = decodeAddAdapter(proposal.data);
+        if (!decoded) {
+          decision = 'unsupported-proposal';
+          assessment = { status: proposal.status, selector: proposal.selector };
+        } else {
+          let isApproved = false;
+          if (config.guardVersion === 'v2') {
+            isApproved = await client.readContract({
+              address: config.guard,
+              abi: guardV2ReadAbi,
+              functionName: 'approvedAdapterByMandate',
+              args: [config.mandateId, decoded],
+              blockNumber: toBlock,
+            });
+          }
+          verified = await verifyAdapterProposal({
+            client,
+            factory: config.factory,
+            vault: config.vault,
+            data: proposal.data,
+            isApproved,
+            safetySeconds: mandateSafetySeconds,
+            expectedExecutableAt: proposal.executableAt,
+            policyEnabled: (policyFlags & 8n) !== 0n,
             blockNumber: toBlock,
           });
         }

@@ -179,6 +179,7 @@ contract VetoExitGuardV2 {
         }
         if ((config.policyFlags & POLICY_ADAPTER_ALLOWLIST) != 0) {
             for (uint256 i = 0; i < config.approvedAdapters.length; i++) {
+                if (config.approvedAdapters[i] == address(0)) revert InvalidMandate();
                 approvedAdapterByMandate[mandateId][config.approvedAdapters[i]] = true;
             }
         }
@@ -267,6 +268,17 @@ contract VetoExitGuardV2 {
                 revert CapDoesNotBreachLimit();
             }
             if (vault.abdicated(INCREASE_RELATIVE_CAP_SELECTOR)) {
+                revert ProposalIsNotExecutable();
+            }
+        } else if (selector == ADD_ADAPTER_SELECTOR) {
+            if ((mandate.policyFlags & POLICY_ADAPTER_ALLOWLIST) == 0) revert PolicyDisabled();
+            if (proposal.length != 36) revert UnsupportedProposal();
+            address proposedAdapter = abi.decode(proposal[4:], (address));
+            if (proposedAdapter == address(0)) revert UnsupportedProposal();
+            if (approvedAdapterByMandate[mandateId][proposedAdapter]) {
+                revert AdapterIsApproved();
+            }
+            if (vault.abdicated(ADD_ADAPTER_SELECTOR)) {
                 revert ProposalIsNotExecutable();
             }
         } else {

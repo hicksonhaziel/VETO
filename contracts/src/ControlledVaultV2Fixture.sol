@@ -47,6 +47,7 @@ contract ControlledVaultV2Fixture {
     bytes4 public constant SET_PERFORMANCE_FEE_SELECTOR = 0x70897b23;
     bytes4 public constant INCREASE_RELATIVE_CAP_SELECTOR = 0x2438525b;
     bytes4 public constant DECREASE_RELATIVE_CAP_SELECTOR = 0x57975270;
+    bytes4 public constant ADD_ADAPTER_SELECTOR = 0x60d54d41;
 
     FixtureAsset public immutable asset;
     address public immutable curator;
@@ -60,6 +61,7 @@ contract ControlledVaultV2Fixture {
     mapping(address owner => mapping(address spender => uint256)) public allowance;
     mapping(bytes32 proposalHash => uint256) private proposalExecutableAt;
     mapping(bytes32 id => uint256) public relativeCap;
+    mapping(address adapter => bool) public isAdapter;
     mapping(bytes4 selector => bool) public isAbdicated;
 
     event Submit(bytes4 indexed selector, bytes data, uint256 executableAt);
@@ -101,7 +103,8 @@ contract ControlledVaultV2Fixture {
         bytes4 selector = bytes4(data);
         bool supported = (selector == SET_MANAGEMENT_FEE_SELECTOR && data.length == 36)
             || (selector == SET_PERFORMANCE_FEE_SELECTOR && data.length == 36)
-            || (selector == INCREASE_RELATIVE_CAP_SELECTOR && data.length >= 100);
+            || (selector == INCREASE_RELATIVE_CAP_SELECTOR && data.length >= 100)
+            || (selector == ADD_ADAPTER_SELECTOR && data.length == 36);
         require(supported, "unsupported");
         bytes32 proposalHash = keccak256(data);
         require(proposalExecutableAt[proposalHash] == 0, "already pending");
@@ -157,6 +160,16 @@ contract ControlledVaultV2Fixture {
             DECREASE_RELATIVE_CAP_SELECTOR,
             abi.encodeCall(this.decreaseRelativeCap, (idData, newRelativeCap))
         );
+    }
+
+    function addAdapter(address newAdapter) external {
+        bytes memory data = abi.encodeCall(this.addAdapter, (newAdapter));
+        bytes32 proposalHash = keccak256(data);
+        uint256 when = proposalExecutableAt[proposalHash];
+        require(when != 0 && block.timestamp >= when, "not executable");
+        proposalExecutableAt[proposalHash] = 0;
+        isAdapter[newAdapter] = true;
+        emit Accept(ADD_ADAPTER_SELECTOR, data);
     }
 
     function approve(address spender, uint256 shares) external returns (bool) {

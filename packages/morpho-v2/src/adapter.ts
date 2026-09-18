@@ -9,6 +9,8 @@ import {
 } from 'viem';
 
 import {
+  addAdapterSelector,
+  decodeAddAdapter,
   decodeIncreaseRelativeCap,
   decodeManagementFee,
   decodePerformanceFee,
@@ -558,6 +560,165 @@ export async function verifyRelativeCapProposal<
     data,
     hasRiskConfig,
     maxRelativeCapWad,
+    safetySeconds,
+    expectedExecutableAt,
+    policyEnabled,
+    snapshot: {
+      factoryApproved,
+      abdicated,
+      executableAt,
+      observedAt: block.timestamp,
+    },
+  });
+}
+
+export type AdapterAssessmentReason =
+  | 'eligible'
+  | 'unsupported-vault'
+  | 'unsupported-proposal'
+  | 'policy-disabled'
+  | 'adapter-approved'
+  | 'setter-abdicated'
+  | 'proposal-cleared'
+  | 'proposal-changed'
+  | 'exit-window-closed';
+
+export type AdapterSnapshot = {
+  factoryApproved: boolean;
+  abdicated: boolean;
+  executableAt: bigint;
+  observedAt: bigint;
+};
+
+export type AdapterAssessment = {
+  eligible: boolean;
+  reason: AdapterAssessmentReason;
+  proposalHash: Hex;
+  adapter?: Address;
+  executableAt?: bigint;
+  remainingSeconds?: bigint;
+};
+
+export function assessAdapterProposal(options: {
+  data: Hex;
+  isApproved: boolean;
+  safetySeconds: bigint;
+  expectedExecutableAt: bigint;
+  snapshot: AdapterSnapshot;
+  policyEnabled?: boolean;
+}): AdapterAssessment {
+  const {
+    data,
+    isApproved,
+    safetySeconds,
+    expectedExecutableAt,
+    snapshot,
+    policyEnabled = true,
+  } = options;
+  const proposalHash = keccak256(data);
+  const adapter = decodeAddAdapter(data);
+  const result = (
+    reason: AdapterAssessmentReason,
+    extras: Partial<AdapterAssessment> = {},
+  ): AdapterAssessment => ({
+    eligible: reason === 'eligible',
+    reason,
+    proposalHash,
+    adapter,
+    executableAt: snapshot.executableAt,
+    ...extras,
+  });
+
+  if (!snapshot.factoryApproved) return result('unsupported-vault');
+  if (adapter === undefined) return result('unsupported-proposal');
+  if (!policyEnabled) return result('policy-disabled');
+  if (isApproved) return result('adapter-approved');
+  if (snapshot.abdicated) return result('setter-abdicated');
+  if (snapshot.executableAt === 0n) return result('proposal-cleared');
+  if (snapshot.executableAt !== expectedExecutableAt) return result('proposal-changed');
+  if (snapshot.executableAt <= snapshot.observedAt) {
+    return result('exit-window-closed', { remainingSeconds: 0n });
+  }
+
+  const remainingSeconds = snapshot.executableAt - snapshot.observedAt;
+  if (remainingSeconds <= safetySeconds) {
+    return result('exit-window-closed', { remainingSeconds });
+  }
+  return result('eligible', { remainingSeconds });
+}
+
+export async function verifyAdapterProposal<
+  TTransport extends Transport,
+  TChain extends Chain | undefined,
+>(options: {
+  client: PublicClient<TTransport, TChain>;
+  factory: Address;
+  vault: Address;
+  data: Hex;
+  isApproved: boolean;
+  safetySeconds: bigint;
+  expectedExecutableAt: bigint;
+  policyEnabled?: boolean;
+  blockNumber?: bigint;
+}): Promise<AdapterAssessment> {
+  const {
+    client,
+    factory,
+    vault,
+    data,
+    isApproved,
+    safetySeconds,
+    expectedExecutableAt,
+    policyEnabled = true,
+    blockNumber,
+  } = options;
+  const [factoryApproved, block] = await Promise.all([
+    client.readContract({
+      address: factory,
+      abi: factoryReadAbi,
+      functionName: 'isVaultV2',
+      args: [vault],
+      blockNumber,
+    }),
+    client.getBlock({ blockNumber }),
+  ]);
+
+  if (!factoryApproved) {
+    return assessAdapterProposal({
+      data,
+      isApproved,
+      safetySeconds,
+      expectedExecutableAt,
+      policyEnabled,
+      snapshot: {
+        factoryApproved,
+        abdicated: false,
+        executableAt: 0n,
+        observedAt: block.timestamp,
+      },
+    });
+  }
+
+  const [executableAt, abdicated] = await Promise.all([
+    client.readContract({
+      address: vault,
+      abi: vaultVerificationAbi,
+      functionName: 'executableAt',
+      args: [data],
+      blockNumber,
+    }),
+    client.readContract({
+      address: vault,
+      abi: vaultVerificationAbi,
+      functionName: 'abdicated',
+      args: [addAdapterSelector],
+      blockNumber,
+    }),
+  ]);
+
+  return assessAdapterProposal({
+    data,
+    isApproved,
     safetySeconds,
     expectedExecutableAt,
     policyEnabled,

@@ -1,5 +1,6 @@
 import {
   decodeFunctionData,
+  getAddress,
   keccak256,
   parseAbiItem,
   size,
@@ -62,10 +63,21 @@ const increaseRelativeCapAbi = [
   },
 ] as const;
 
+const addAdapterAbi = [
+  {
+    type: 'function',
+    name: 'addAdapter',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'adapter', type: 'address' }],
+    outputs: [],
+  },
+] as const;
+
 export const setManagementFeeSelector = toFunctionSelector('setManagementFee(uint256)');
 export const setPerformanceFeeSelector = toFunctionSelector('setPerformanceFee(uint256)');
 export const increaseRelativeCapSelector = toFunctionSelector('increaseRelativeCap(bytes,uint256)');
 export const decreaseRelativeCapSelector = toFunctionSelector('decreaseRelativeCap(bytes,uint256)');
+export const addAdapterSelector = toFunctionSelector('addAdapter(address)');
 
 export type ProposalType =
   | 'management-fee'
@@ -170,6 +182,22 @@ export function decodeIncreaseRelativeCap(
       riskId: keccak256(idData),
       newRelativeCap,
     };
+  } catch {
+    return undefined;
+  }
+}
+
+export function decodeAddAdapter(data: Hex): Address | undefined {
+  if (size(data) !== 36 || data.slice(0, 10).toLowerCase() !== addAdapterSelector.toLowerCase()) {
+    return undefined;
+  }
+
+  try {
+    const decoded = decodeFunctionData({ abi: addAdapterAbi, data });
+    if (decoded.functionName !== 'addAdapter') return undefined;
+    const [adapter] = decoded.args;
+    if (adapter === '0x0000000000000000000000000000000000000000') return undefined;
+    return getAddress(adapter);
   } catch {
     return undefined;
   }
@@ -313,6 +341,15 @@ export function identifyProposal(
           proposalType: 'relative-cap',
           riskId: decoded.riskId,
           newRelativeCap: decoded.newRelativeCap,
+        }
+      : undefined;
+  }
+  if (sel === addAdapterSelector.toLowerCase()) {
+    const adapter = decodeAddAdapter(data);
+    return adapter !== undefined
+      ? {
+          proposalType: 'add-adapter',
+          adapter,
         }
       : undefined;
   }
